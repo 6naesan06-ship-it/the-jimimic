@@ -283,7 +283,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Footer Controls Guide */}
       <footer className="flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-400 shrink-0">
-        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · 마우스 시점</div>
+        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · 좌클릭/Space 검 베기(4장) · 마우스 시점</div>
         <div>헤드폰 착용을 권장합니다</div>
       </footer>
 

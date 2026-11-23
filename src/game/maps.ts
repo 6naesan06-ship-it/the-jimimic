@@ -6,6 +6,7 @@ export interface ChapterMapData {
   width: number;
   height: number;
   grid: string[];
+  cells: string[][];
   playerStart: { gx: number; gz: number };
   exitTile: { gx: number; gz: number };
   items: Array<{ gx: number; gz: number; kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary' }>;
@@ -21,6 +22,7 @@ export interface ChapterMapData {
   stoneToros: Array<{ gx: number; gz: number }>;
   waterTiles: Array<{ gx: number; gz: number }>;
   walkableTiles: Array<{ gx: number; gz: number }>;
+  shiftCandidates: Array<{ gx: number; gz: number }>;
 }
 
 const RAW_MAPS: Record<number, string[]> = {
@@ -105,44 +107,133 @@ const RAW_MAPS: Record<number, string[]> = {
     '#######################',
   ],
 
-  // Chapter 4: Twisted House, Blood Swamp & Saigomo's Spider Lair (Kintoru Finale)
+  // Chapter 4: Giant Underground Cavern Arena — Sword Boss Duel vs. Saigomo
   4: [
     '#######################',
-    '#S.T.T.T.T.L...#..K..D#',
-    '#.#####.###.###.#.....#',
-    '#T#...#...#...#.#..J..#',
-    '#.#.K.#...#...#.#.....#',
-    '#T#...L.B.#.D.L.#.....#',
-    '#.###.#####.#####.###.#',
-    '#T#...~~~~~~~~~~~...#.#',
-    '#.#.J.~~~~~~~~~~~.J.#.#',
-    '#T#...~~~~J~J~~~~...#.#',
-    '#.#.P.~~~~~~~P~~~.K.#.#',
-    '#L....~~~~JGJ~~~~....L#',
-    '#.#.W.~~~~~~~~~~~.W.#.#',
-    '#.#.K.~~~~J~J~~~~...#.#',
-    '#.#...~~~~~~~~~~~.J.#.#',
-    '#.###.#####.#####.###.#',
-    '#W.B..#...L.....#..W..#',
-    '#.###.#.#######.#.###.#',
-    '#.#K..#...#B..#.#..K#.#',
-    '#.#.W.L...#...L.#.W.#.#',
-    '#.#####.###.###.###.#.#',
-    '#....T..T..K..T..T...X#',
+    '###..~...........~..###',
+    '##..J....W...W....J..##',
+    '#..~~~...........~~~..#',
+    '#..~~~..#.....#..~~~..#',
+    '#.......#.....#.......#',
+    '#.D..W...........W..B.#',
+    '#.....J...~~~...J.....#',
+    '#........~~P~~........#',
+    '#....#...~~~~~...#....#',
+    '#....#....~~~....#P...#',
+    '#..W...............W..#',
+    '#.......J.....J.......#',
+    '#....#...........#....#',
+    '#....#...........#....#',
+    '#.B...............D...#',
+    '#.......#.....#.......#',
+    '#..~~~..#.....#..~~~..#',
+    '#..~~~...........~~~..#',
+    '#...J.....S.......J...#',
+    '##....~.........~....##',
+    '###.......X.........###',
     '#######################',
   ],
 };
 
 const SOLID_CHARS = new Set(['#', 'F', 'O', 'G', 'J']);
 
+const FIXED_PROP_SPOTS: Record<number, Array<{ gx: number; gz: number }>> = {
+  1: [
+    { gx: 5, gz: 7 },
+    { gx: 13, gz: 7 },
+  ],
+  2: [
+    { gx: 9, gz: 8 },
+    { gx: 13, gz: 8 },
+    { gx: 9, gz: 13 },
+    { gx: 13, gz: 13 },
+    { gx: 19, gz: 8 },
+    { gx: 19, gz: 19 },
+  ],
+  3: [
+    { gx: 7, gz: 5 },
+    { gx: 15, gz: 5 },
+    { gx: 7, gz: 16 },
+    { gx: 15, gz: 16 },
+  ],
+  4: [
+    { gx: 7, gz: 5 },
+    { gx: 15, gz: 5 },
+    { gx: 7, gz: 16 },
+    { gx: 15, gz: 16 },
+  ],
+};
+
+function keyOf(gx: number, gz: number): string {
+  return `${gx},${gz}`;
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function computeBfsDistances(
+  sx: number,
+  sz: number,
+  cells: string[][],
+  width: number,
+  height: number
+): Int16Array {
+  const total = width * height;
+  const dist = new Int16Array(total).fill(-1);
+  const queue = new Int16Array(total);
+  let head = 0;
+  let tail = 0;
+  const startIdx = sz * width + sx;
+  dist[startIdx] = 0;
+  queue[tail++] = startIdx;
+
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  while (head < tail) {
+    const curr = queue[head++];
+    const cx = curr % width;
+    const cz = (curr - cx) / width;
+    const nextD = dist[curr] + 1;
+
+    for (let i = 0; i < 4; i++) {
+      const nx = cx + dirs[i][0];
+      const nz = cz + dirs[i][1];
+      if (nx < 0 || nz < 0 || nx >= width || nz >= height) continue;
+      if (SOLID_CHARS.has(cells[nz][nx])) continue;
+      const nIdx = nz * width + nx;
+      if (dist[nIdx] !== -1) continue;
+      dist[nIdx] = nextD;
+      queue[tail++] = nIdx;
+    }
+  }
+
+  return dist;
+}
+
 export function parseChapterMap(chapterId: number): ChapterMapData {
   const rows = RAW_MAPS[chapterId] || RAW_MAPS[1];
   const height = rows.length;
   const width = rows[0].length;
+  const cells: string[][] = rows.map((r) => r.split(''));
 
   let playerStart = { gx: 1, gz: 1 };
   let exitTile = { gx: width - 2, gz: height - 2 };
-  const items: ChapterMapData['items'] = [];
+  let mainCount = 0;
+  let batteryCount = 0;
+  let diaryCount = 0;
+
   const lanterns: ChapterMapData['lanterns'] = [];
   const monsterSpawns: ChapterMapData['monsterSpawns'] = [];
   const desks: ChapterMapData['desks'] = [];
@@ -155,6 +246,11 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
   const stoneToros: ChapterMapData['stoneToros'] = [];
   const waterTiles: ChapterMapData['waterTiles'] = [];
   const walkableTiles: ChapterMapData['walkableTiles'] = [];
+  const reservedSet = new Set<string>();
+
+  (FIXED_PROP_SPOTS[chapterId] || []).forEach((sp) => {
+    reservedSet.add(keyOf(sp.gx, sp.gz));
+  });
 
   const mainItemKind: 'key' | 'ofuda' | 'butterfly' | 'seal' =
     chapterId === 1
@@ -167,7 +263,7 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
 
   for (let gz = 0; gz < height; gz++) {
     for (let gx = 0; gx < width; gx++) {
-      const ch = rows[gz][gx];
+      const ch = cells[gz][gx];
 
       if (ch === 'F') {
         desks.push({ gx, gz });
@@ -189,18 +285,124 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
 
       walkableTiles.push({ gx, gz });
 
-      if (ch === 'S') playerStart = { gx, gz };
-      else if (ch === 'X') exitTile = { gx, gz };
-      else if (ch === 'K') items.push({ gx, gz, kind: mainItemKind });
-      else if (ch === 'B') items.push({ gx, gz, kind: 'battery' });
-      else if (ch === 'D') items.push({ gx, gz, kind: 'diary' });
-      else if (ch === 'L') lanterns.push({ gx, gz });
-      else if (ch === 'P') monsterSpawns.push({ gx, gz });
-      else if (ch === 'C') chalkboards.push({ gx, gz });
-      else if (ch === 'E') exitSigns.push({ gx, gz });
-      else if (ch === 'T') toriiArches.push({ gx, gz });
-      else if (ch === 'W') spiderWebs.push({ gx, gz });
-      else if (ch === '~') waterTiles.push({ gx, gz });
+      if (ch === 'S') {
+        playerStart = { gx, gz };
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'X') {
+        exitTile = { gx, gz };
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'K') {
+        mainCount++;
+        cells[gz][gx] = '.';
+      } else if (ch === 'B') {
+        batteryCount++;
+        cells[gz][gx] = '.';
+      } else if (ch === 'D') {
+        diaryCount++;
+        cells[gz][gx] = '.';
+      } else if (ch === 'L') {
+        lanterns.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'P') {
+        monsterSpawns.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'C') {
+        chalkboards.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'E') {
+        exitSigns.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'T') {
+        toriiArches.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === 'W') {
+        spiderWebs.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      } else if (ch === '~') {
+        waterTiles.push({ gx, gz });
+        reservedSet.add(keyOf(gx, gz));
+      }
+    }
+  }
+
+  // Protect buffer tiles around start and exit
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      reservedSet.add(keyOf(playerStart.gx + dx, playerStart.gz + dz));
+      reservedSet.add(keyOf(exitTile.gx + dx, exitTile.gz + dz));
+    }
+  }
+
+  // Randomize all collectible item placements on every game start / restart
+  const distFromStart = computeBfsDistances(playerStart.gx, playerStart.gz, cells, width, height);
+  const eligibleTiles = walkableTiles.filter((t) => {
+    const d = distFromStart[t.gz * width + t.gx];
+    if (d < 3) return false;
+    if (t.gx === playerStart.gx && t.gz === playerStart.gz) return false;
+    if (t.gx === exitTile.gx && t.gz === exitTile.gz) return false;
+    if (Math.abs(t.gx - exitTile.gx) <= 1 && Math.abs(t.gz - exitTile.gz) <= 1) return false;
+    if (monsterSpawns.some((m) => m.gx === t.gx && m.gz === t.gz)) return false;
+    if ((FIXED_PROP_SPOTS[chapterId] || []).some((p) => p.gx === t.gx && p.gz === t.gz)) return false;
+    return true;
+  });
+
+  const usedItemKeys = new Set<string>();
+  const pickedItems: ChapterMapData['items'] = [];
+
+  const pickRandomSlots = (
+    count: number,
+    kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary',
+    minStartDist: number,
+    minSpacing: number
+  ) => {
+    let placed = 0;
+    let spacing = minSpacing;
+    let startDist = minStartDist;
+
+    while (placed < count && spacing >= 0) {
+      const pool = shuffleArray(
+        eligibleTiles.filter(
+          (t) =>
+            !usedItemKeys.has(keyOf(t.gx, t.gz)) &&
+            distFromStart[t.gz * width + t.gx] >= startDist
+        )
+      );
+
+      for (const candidate of pool) {
+        if (placed >= count) break;
+        const tooClose = pickedItems.some(
+          (existing) => Math.hypot(existing.gx - candidate.gx, existing.gz - candidate.gz) < spacing
+        );
+        if (!tooClose) {
+          usedItemKeys.add(keyOf(candidate.gx, candidate.gz));
+          pickedItems.push({ gx: candidate.gx, gz: candidate.gz, kind });
+          placed++;
+        }
+      }
+      spacing -= 1.2;
+      startDist = Math.max(3, startDist - 2);
+    }
+  };
+
+  pickRandomSlots(mainCount, mainItemKind, 7, 4.2);
+  pickRandomSlots(batteryCount, 'battery', 4, 3.0);
+  pickRandomSlots(diaryCount, 'diary', 4, 3.0);
+
+  // Protect randomized item tiles so silent maze walls never cover collectibles
+  pickedItems.forEach((it) => {
+    reservedSet.add(keyOf(it.gx, it.gz));
+  });
+
+  // Collect interior corridor/wall tiles eligible for silent 5-second maze shifts (Ch.1-3 mazes only; Ch.4 is an open cave boss arena)
+  const shiftCandidates: Array<{ gx: number; gz: number }> = [];
+  if (chapterId !== 4) {
+    for (let gz = 1; gz < height - 1; gz++) {
+      for (let gx = 1; gx < width - 1; gx++) {
+        const ch = cells[gz][gx];
+        if ((ch === '#' || ch === '.') && !reservedSet.has(keyOf(gx, gz))) {
+          shiftCandidates.push({ gx, gz });
+        }
+      }
     }
   }
 
@@ -209,9 +411,10 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
     width,
     height,
     grid: rows,
+    cells,
     playerStart,
     exitTile,
-    items,
+    items: pickedItems,
     lanterns,
     monsterSpawns,
     desks,
@@ -224,6 +427,7 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
     stoneToros,
     waterTiles,
     walkableTiles,
+    shiftCandidates,
   };
 }
 
@@ -247,7 +451,53 @@ export function worldToGrid(x: number, z: number, map: ChapterMapData): { gx: nu
 
 export function isWall(gx: number, gz: number, map: ChapterMapData): boolean {
   if (gx < 0 || gz < 0 || gx >= map.width || gz >= map.height) return true;
-  return SOLID_CHARS.has(map.grid[gz][gx]);
+  return SOLID_CHARS.has(map.cells[gz][gx]);
+}
+
+export function canReachAllTargets(
+  sx: number,
+  sz: number,
+  targets: Array<{ gx: number; gz: number }>,
+  map: ChapterMapData
+): boolean {
+  if (isWall(sx, sz, map)) return false;
+  const total = map.width * map.height;
+  const visited = new Uint8Array(total);
+  const queue = new Int16Array(total);
+  let head = 0;
+  let tail = 0;
+  const startIdx = sz * map.width + sx;
+  visited[startIdx] = 1;
+  queue[tail++] = startIdx;
+
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  while (head < tail) {
+    const curr = queue[head++];
+    const cx = curr % map.width;
+    const cz = (curr - cx) / map.width;
+
+    for (let i = 0; i < 4; i++) {
+      const nx = cx + dirs[i][0];
+      const nz = cz + dirs[i][1];
+      if (isWall(nx, nz, map)) continue;
+      const nIdx = nz * map.width + nx;
+      if (visited[nIdx]) continue;
+      visited[nIdx] = 1;
+      queue[tail++] = nIdx;
+    }
+  }
+
+  for (const t of targets) {
+    if (isWall(t.gx, t.gz, map)) return false;
+    if (!visited[t.gz * map.width + t.gx]) return false;
+  }
+  return true;
 }
 
 // Fast grid BFS returning the next grid coordinate from (sx, sz) toward (tx, tz)

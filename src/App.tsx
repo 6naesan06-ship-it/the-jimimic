@@ -58,6 +58,15 @@ const INITIAL_HUD: HudSnapshot = {
   doctorReviveReady: false,
   nearestObjectiveDist: null,
   nearestObjectiveAngleDeg: null,
+  isBossFight: false,
+  playerHp: 100,
+  playerMaxHp: 100,
+  hurtFlash: 0,
+  bossHp: 1000,
+  bossMaxHp: 1000,
+  bossStunTimer: 0,
+  bossAttackWarning: null,
+  bossHitsLanded: 0,
 };
 
 export default function App() {
@@ -132,6 +141,7 @@ export default function App() {
         setScreen('dead');
       },
       onChapterClear: (chId, elapsed) => {
+        soundEngine.stopBgm();
         setClearTimeSec(elapsed);
         setClearSceneIdx(0);
         setSubtitle(null);
@@ -168,9 +178,13 @@ export default function App() {
         });
         setScreen('clear');
       },
-      onItemCollected: (count, total) => {
+      onItemCollected: (count, total, kind) => {
         if (count >= total) {
-          showToast('모든 봉인 아이템을 모았습니다! 붉은 도리이 출구로 향하십시오.');
+          showToast(
+            kind === 'key'
+              ? '열쇠 4개를 모두 모았습니다! 지하실 문 출구로 향하십시오.'
+              : '모든 봉인 아이템을 모았습니다! 붉은 도리이 출구로 향하십시오.'
+          );
         } else {
           showToast(`봉인 아이템 회수 (${count} / ${total})`);
         }
@@ -276,6 +290,7 @@ export default function App() {
   };
 
   const handleReturnToTitle = () => {
+    soundEngine.stopBgm();
     setActiveDiary(null);
     setCodexOpen(false);
     setSubtitle(null);
@@ -362,7 +377,9 @@ export default function App() {
 
             <div className="p-3.5 bg-[#0e0d13] border border-zinc-800/80 rounded text-xs text-zinc-400 space-y-1">
               <p className="text-zinc-200 font-medium">
-                생존 목표 · 괴물 추격 범위 12m (12m 이상 벗어나면 추격 중단)
+                {currentChapter.id === 4
+                  ? '결전 목표 · 축복받은 검으로 사이고모와 직접 대결 (약 20회 타격 · 3초 스턴 활용)'
+                  : '생존 목표 · 괴물 추격 범위 12m (12m 이상 벗어나면 추격 중단)'}
               </p>
               <p>{currentChapter.objectiveLabel}</p>
               <p className="text-amber-300/90 pt-1">
@@ -430,6 +447,7 @@ export default function App() {
           onToggleFlashlight={() => engineRef.current?.toggleFlashlight()}
           onToggleCrouch={() => engineRef.current?.toggleCrouch()}
           onTriggerSkill={() => engineRef.current?.triggerJobSkill()}
+          onSwordAttack={() => engineRef.current?.triggerSwordAttack()}
           onInteract={() => engineRef.current?.triggerInteract()}
           onLockPointer={() => engineRef.current?.requestPointerLock()}
         />

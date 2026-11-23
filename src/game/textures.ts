@@ -37,6 +37,8 @@ export interface ProceduralTextureSet {
   schoolCeiling: THREE.CanvasTexture;
   shojiWall: THREE.CanvasTexture;
   shrineWall: THREE.CanvasTexture;
+  caveRockWall: THREE.CanvasTexture;
+  caveStoneFloor: THREE.CanvasTexture;
   ceilingWood: THREE.CanvasTexture;
   ofuda: THREE.CanvasTexture;
   chalkboard: THREE.CanvasTexture;
@@ -48,6 +50,8 @@ export interface ProceduralTextureSet {
   bloodDecal: THREE.CanvasTexture;
   wallScratch: THREE.CanvasTexture;
   particleMote: THREE.CanvasTexture;
+  sakuraPetal: THREE.CanvasTexture;
+  mistPuff: THREE.CanvasTexture;
   shizuFace: THREE.CanvasTexture;
   biwakiFace: THREE.CanvasTexture;
   megumiFace: THREE.CanvasTexture;
@@ -260,6 +264,55 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
   srCtx.arc(256, 240, 72, 0, Math.PI * 2);
   srCtx.stroke();
   const shrineWall = finalizeTexture(srC, aniso, 1, 1);
+
+  // 6b. Giant Cavern Craggy Basalt Rock Wall with Crimson Mineral Veins (Ch.4)
+  const [crC, crCtx] = makeCanvas(512, 512);
+  crCtx.fillStyle = '#141216';
+  crCtx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 65; i++) {
+    const shade = 14 + ((i * 17) % 24);
+    crCtx.fillStyle = `rgb(${shade + 4}, ${shade}, ${shade + 5})`;
+    crCtx.beginPath();
+    const rx = (i * 83) % 512;
+    const ry = (i * 137) % 512;
+    crCtx.moveTo(rx, ry);
+    crCtx.lineTo(rx + 45 + (i % 35), ry + 18);
+    crCtx.lineTo(rx + 28, ry + 62 + (i % 28));
+    crCtx.lineTo(rx - 18, ry + 34);
+    crCtx.closePath();
+    crCtx.fill();
+  }
+  crCtx.strokeStyle = 'rgba(165, 22, 32, 0.42)';
+  crCtx.lineWidth = 3;
+  for (let v = 0; v < 8; v++) {
+    crCtx.beginPath();
+    crCtx.moveTo(v * 68, 0);
+    crCtx.bezierCurveTo(v * 68 + 30, 180, v * 68 - 25, 340, v * 68 + 15, 512);
+    crCtx.stroke();
+  }
+  const caveRockWall = finalizeTexture(crC, aniso, 1, 1);
+
+  // 6c. Cavern Bedrock Floor (Ch.4)
+  const [cfC, cfCtx] = makeCanvas(512, 512);
+  cfCtx.fillStyle = '#110f13';
+  cfCtx.fillRect(0, 0, 512, 512);
+  for (let r = 0; r < 80; r++) {
+    const shade = 15 + ((r * 23) % 18);
+    cfCtx.fillStyle = `rgba(${shade + 5}, ${shade}, ${shade + 4}, 0.65)`;
+    cfCtx.beginPath();
+    cfCtx.arc((r * 97) % 512, (r * 151) % 512, 16 + (r % 26), 0, Math.PI * 2);
+    cfCtx.fill();
+  }
+  cfCtx.strokeStyle = 'rgba(130, 14, 24, 0.32)';
+  cfCtx.lineWidth = 2.5;
+  for (let k = 0; k < 6; k++) {
+    cfCtx.beginPath();
+    cfCtx.moveTo(0, k * 88 + 20);
+    cfCtx.lineTo(240, k * 88 + 48);
+    cfCtx.lineTo(512, k * 88 + 14);
+    cfCtx.stroke();
+  }
+  const caveStoneFloor = finalizeTexture(cfC, aniso, 14, 14);
 
   // 7. Dark Wooden Beam Ceiling
   const [cC, cCtx] = makeCanvas(256, 256);
@@ -530,6 +583,43 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
   pmCtx.fillRect(0, 0, 64, 64);
   const particleMote = finalizeTexture(pmC, aniso, 1, 1);
 
+  // 8j. Delicate Notched Sakura Petal Texture
+  const [spC, spCtx] = makeCanvas(64, 64);
+  spCtx.clearRect(0, 0, 64, 64);
+  const spGrad = spCtx.createLinearGradient(18, 10, 46, 54);
+  spGrad.addColorStop(0, '#fbcfe8');
+  spGrad.addColorStop(0.6, '#f9a8d4');
+  spGrad.addColorStop(1, '#f472b6');
+  spCtx.fillStyle = spGrad;
+  spCtx.beginPath();
+  spCtx.moveTo(32, 54);
+  spCtx.bezierCurveTo(10, 42, 10, 18, 25, 10);
+  spCtx.lineTo(32, 18);
+  spCtx.lineTo(39, 10);
+  spCtx.bezierCurveTo(54, 18, 54, 42, 32, 54);
+  spCtx.closePath();
+  spCtx.fill();
+  const sakuraPetal = finalizeTexture(spC, aniso, 1, 1);
+
+  // 8k. Soft Layered Fog/Mist Wisp Puff Texture
+  const [mpC, mpCtx] = makeCanvas(128, 128);
+  mpCtx.clearRect(0, 0, 128, 128);
+  [
+    [64, 64, 54, 0.35],
+    [46, 68, 38, 0.25],
+    [82, 60, 40, 0.25],
+  ].forEach(([cx, cy, r, a]) => {
+    const g = mpCtx.createRadialGradient(cx, cy, 4, cx, cy, r);
+    g.addColorStop(0, `rgba(255, 255, 255, ${a})`);
+    g.addColorStop(0.55, `rgba(240, 244, 248, ${a * 0.45})`);
+    g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    mpCtx.fillStyle = g;
+    mpCtx.beginPath();
+    mpCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    mpCtx.fill();
+  });
+  const mistPuff = finalizeTexture(mpC, aniso, 1, 1);
+
   // 9. Monster Face Textures
   const shizuFace = createMonsterFaceTexture('shizu', aniso);
   const biwakiFace = createMonsterFaceTexture('biwaki', aniso);
@@ -548,6 +638,8 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     schoolCeiling,
     shojiWall,
     shrineWall,
+    caveRockWall,
+    caveStoneFloor,
     ceilingWood,
     ofuda,
     chalkboard,
@@ -559,6 +651,8 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     bloodDecal,
     wallScratch,
     particleMote,
+    sakuraPetal,
+    mistPuff,
     shizuFace,
     biwakiFace,
     megumiFace,
@@ -575,6 +669,8 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
       schoolCeiling.dispose();
       shojiWall.dispose();
       shrineWall.dispose();
+      caveRockWall.dispose();
+      caveStoneFloor.dispose();
       ceilingWood.dispose();
       ofuda.dispose();
       chalkboard.dispose();
@@ -586,6 +682,8 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
       bloodDecal.dispose();
       wallScratch.dispose();
       particleMote.dispose();
+      sakuraPetal.dispose();
+      mistPuff.dispose();
       shizuFace.dispose();
       biwakiFace.dispose();
       megumiFace.dispose();

@@ -1,5 +1,16 @@
 import React from 'react';
-import { BookOpen, Compass, Flashlight, Pause, ShieldAlert, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import {
+  BookOpen,
+  Compass,
+  Flashlight,
+  Heart,
+  Pause,
+  ShieldAlert,
+  Sparkles,
+  Swords,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { ChapterMeta, CutsceneLine, JOBS, MONSTERS } from '../data/lore';
 import { HudSnapshot } from '../game/MimicEngine';
 
@@ -15,6 +26,7 @@ interface GameHUDProps {
   onToggleFlashlight: () => void;
   onToggleCrouch: () => void;
   onTriggerSkill: () => void;
+  onSwordAttack: () => void;
   onInteract: () => void;
   onLockPointer: () => void;
 }
@@ -37,6 +49,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onToggleFlashlight,
   onToggleCrouch,
   onTriggerSkill,
+  onSwordAttack,
   onInteract,
   onLockPointer,
 }) => {
@@ -51,6 +64,8 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   const jobMeta = JOBS.find((j) => j.id === hud.jobId) || JOBS[0];
   const staminaPct = Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100));
+  const playerHpPct = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
+  const bossHpPct = Math.max(0, Math.min(100, (hud.bossHp / hud.bossMaxHp) * 100));
   const skillReady = hud.skillCooldown <= 0.05;
 
   return (
@@ -65,6 +80,18 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         }}
       />
 
+      {/* Hurt Impact Flash */}
+      {hud.hurtFlash > 0.02 && (
+        <div
+          className="absolute inset-0"
+          style={{
+            opacity: Math.min(0.82, hud.hurtFlash * 0.75),
+            background:
+              'radial-gradient(circle at center, rgba(185, 28, 28, 0.14) 30%, rgba(220, 38, 38, 0.78) 100%)',
+          }}
+        />
+      )}
+
       {/* Subtle Scanlines */}
       <div className="horror-scanlines absolute inset-0 opacity-20" />
 
@@ -78,18 +105,31 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           <span className="font-mono-tabular">{formatTime(hud.elapsedSeconds)}</span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
-          <span className="text-sm font-medium text-zinc-100">
-            {hud.exitUnlocked
-              ? '출구 봉인 해제 · 붉은 도리이로 탈출'
-              : `${chapter.itemNoun} 수집`}
-          </span>
-          <span
-            className={`font-mono-tabular text-sm font-semibold ${
-              hud.exitUnlocked ? 'text-emerald-400' : 'text-amber-300'
-            }`}
-          >
-            {hud.collectedItems} / {hud.requiredItems}
-          </span>
+          {hud.isBossFight ? (
+            <>
+              <span className="text-sm font-medium text-red-300">사이고모 토벌전 (축복받은 검)</span>
+              <span className="font-mono-tabular text-sm font-semibold text-amber-300">
+                타격 {hud.bossHitsLanded}회
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-medium text-zinc-100">
+                {hud.exitUnlocked
+                  ? chapter.id === 1
+                    ? '지하실 문 봉인 해제 · 탈출 가능'
+                    : '출구 봉인 해제 · 붉은 도리이로 탈출'
+                  : `${chapter.itemNoun} 수집`}
+              </span>
+              <span
+                className={`font-mono-tabular text-sm font-semibold ${
+                  hud.exitUnlocked ? 'text-emerald-400' : 'text-amber-300'
+                }`}
+              >
+                {hud.collectedItems} / {hud.requiredItems}
+              </span>
+            </>
+          )}
         </div>
         <p className="text-xs text-zinc-400 leading-snug">{chapter.objectiveLabel}</p>
 
@@ -101,8 +141,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               style={{ transform: `rotate(${hud.nearestObjectiveAngleDeg}deg)` }}
             />
             <span>
-              {hud.exitUnlocked ? '출구 방향' : '가장 가까운 봉인'} ·{' '}
-              <span className="font-mono-tabular">{hud.nearestObjectiveDist}m</span>
+              {hud.isBossFight
+                ? '사이고모 위치'
+                : hud.exitUnlocked
+                  ? chapter.id === 1
+                    ? '지하실 문 방향'
+                    : '출구 방향'
+                  : '가장 가까운 봉인'}{' '}
+              · <span className="font-mono-tabular">{hud.nearestObjectiveDist}m</span>
             </span>
           </div>
         )}
@@ -125,7 +171,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         )}
 
-        {hud.anyMonsterChasing && closestMonster && (
+        {!hud.isBossFight && hud.anyMonsterChasing && closestMonster && (
           <p className="text-xs font-semibold text-red-400 pt-1 border-t border-zinc-800/80">
             추격 중: {closestMonster.name} (
             <span className="font-mono-tabular">{hud.nearestMonsterDist.toFixed(1)}m</span> · 12m
@@ -133,6 +179,41 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </p>
         )}
       </div>
+
+      {/* Chapter 4 Top-Center Boss Health Bar & Attack / Stun Status */}
+      {hud.isBossFight && (
+        <div className="absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 w-[min(92vw,28rem)] bg-[#08080c]/92 border border-red-900/80 rounded-md px-4 py-2.5 space-y-1.5 shadow-xl">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-serif-kr font-bold text-red-300">
+              사이고모 (거미 형상 킨토루)
+            </span>
+            <span className="font-mono-tabular text-zinc-200 font-semibold">
+              {hud.bossHp} / {hud.bossMaxHp}
+            </span>
+          </div>
+          <div className="h-2.5 bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden">
+            <div
+              className={`h-full transition-all duration-150 ${
+                hud.bossStunTimer > 0 ? 'bg-amber-400' : 'bg-red-600'
+              }`}
+              style={{ width: `${bossHpPct}%` }}
+            />
+          </div>
+          {hud.bossStunTimer > 0 ? (
+            <p className="text-center text-xs font-bold text-amber-300">
+              ⚡ 결계 파괴! 스턴 상태! 지금 검으로 베십시오! ({hud.bossStunTimer.toFixed(1)}s)
+            </p>
+          ) : hud.bossAttackWarning ? (
+            <p className="text-center text-xs font-semibold text-red-300 animate-pulse">
+              {hud.bossAttackWarning}
+            </p>
+          ) : (
+            <p className="text-center text-[11px] text-amber-200/80">
+              🛡️ 제어의 결계 활성 · 스턴 시에만 피해! (기둥 충돌 / 공격 준비 패링 / 오의 후 3초 스턴)
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Top Right: Action Buttons */}
       <div className="pointer-events-auto absolute top-4 right-4 flex items-center gap-2">
@@ -194,7 +275,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       )}
 
       {/* Discreet Mouse Look Hint when pointer not locked */}
-      {!hud.pointerLocked && (
+      {!hud.pointerLocked && !hud.isBossFight && (
         <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2">
           <button
             onClick={onLockPointer}
@@ -205,8 +286,30 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
       )}
 
-      {/* Bottom Left: Battery, Stamina & Active Job Skill */}
+      {/* Bottom Left: HP (Ch.4), Battery, Stamina & Active Job Skill */}
       <div className="absolute bottom-4 left-4 w-72 bg-[#08080c]/88 border border-zinc-800/90 rounded-md p-3.5 space-y-2.5">
+        {hud.isBossFight && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-red-300 flex items-center gap-1.5 font-medium">
+                <Heart className="w-3.5 h-3.5 text-red-500" />
+                <span>야스의 체력</span>
+              </span>
+              <span className="font-mono-tabular text-zinc-200 font-semibold">
+                {hud.jobId === 'developer' ? '∞' : `${Math.round(hud.playerHp)} / ${hud.playerMaxHp}`}
+              </span>
+            </div>
+            <div className="h-2 bg-zinc-800 rounded-sm overflow-hidden">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  playerHpPct < 30 ? 'bg-red-500' : 'bg-emerald-500'
+                }`}
+                style={{ width: `${hud.jobId === 'developer' ? 100 : playerHpPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-zinc-300 flex items-center gap-1.5">
@@ -230,7 +333,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-zinc-300">
-              체력 [Shift] · {hud.crouching ? '은신 자세' : '서 있음'}
+              스태미나 [Shift] · {hud.crouching ? '은신 자세' : '서 있음'}
             </span>
             <span className="font-mono-tabular text-zinc-300">
               {hud.jobId === 'developer' ? '∞' : Math.round(hud.stamina)}
@@ -270,6 +373,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Bottom Right: Compact Controls & Quick Touch Buttons */}
       <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
+          {hud.isBossFight && (
+            <button
+              onClick={onSwordAttack}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded border bg-amber-900/90 hover:bg-amber-800 border-amber-500/80 text-amber-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Swords className="w-3.5 h-3.5" />
+              <span>검 베기 [좌클릭 / Space]</span>
+            </button>
+          )}
           <button
             onClick={onTriggerSkill}
             disabled={!skillReady}
@@ -311,7 +423,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           )}
         </div>
         <div className="hidden sm:block px-3 py-1.5 bg-[#08080c]/85 border border-zinc-800/80 rounded text-xs text-zinc-400">
-          이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G
+          {hud.isBossFight
+            ? '이동 WASD · 달리기 Shift · 검 베기 좌클릭/Space · 손전등 F · 스킬 G'
+            : '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G'}
         </div>
       </div>
     </div>

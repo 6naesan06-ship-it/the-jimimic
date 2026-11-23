@@ -1241,3 +1241,452 @@ export function createWallTalismanCluster(textures: ProceduralTextureSet): THREE
   return group;
 }
 
+export interface BasementDoorRig {
+  group: THREE.Group;
+  doorPivot: THREE.Group;
+  lockMesh: THREE.Group;
+  statusLampMat: THREE.MeshStandardMaterial;
+  windowMat: THREE.MeshStandardMaterial;
+}
+
+export function createBasementDoor(unlocked = false): BasementDoorRig {
+  const group = new THREE.Group();
+
+  const concreteMat = new THREE.MeshStandardMaterial({
+    color: 0x26292e,
+    roughness: 0.92,
+    metalness: 0.06,
+  });
+  const frameSteelMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1c20,
+    roughness: 0.55,
+    metalness: 0.72,
+  });
+  const doorSteelMat = new THREE.MeshStandardMaterial({
+    color: 0x2f353b,
+    roughness: 0.48,
+    metalness: 0.68,
+  });
+  const rustMat = new THREE.MeshStandardMaterial({
+    color: 0x452218,
+    roughness: 0.8,
+    metalness: 0.35,
+  });
+  const statusLampMat = new THREE.MeshStandardMaterial({
+    color: unlocked ? 0x22c55e : 0xdc2626,
+    emissive: unlocked ? 0x16a34a : 0x991b1b,
+    emissiveIntensity: 1.6,
+    roughness: 0.25,
+  });
+  const windowMat = new THREE.MeshStandardMaterial({
+    color: unlocked ? 0x34d399 : 0x7f1d1d,
+    emissive: unlocked ? 0x10b981 : 0x450a0a,
+    emissiveIntensity: unlocked ? 1.15 : 0.65,
+    roughness: 0.25,
+    metalness: 0.2,
+  });
+
+  // Heavy concrete step & surround frame (bottom-center y=0)
+  const step = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.14, 0.68), concreteMat);
+  step.position.set(0, 0.07, 0);
+  step.receiveShadow = true;
+  group.add(step);
+
+  [-0.86, 0.86].forEach((px) => {
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 2.75, 0.46), concreteMat);
+    pillar.position.set(px, 1.375, 0);
+    pillar.castShadow = true;
+    pillar.receiveShadow = true;
+    group.add(pillar);
+  });
+
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.36, 0.5), concreteMat);
+  lintel.position.set(0, 2.68, 0);
+  lintel.castShadow = true;
+  group.add(lintel);
+
+  // Dark inner recess behind the door when it swings ajar
+  const abyssMat = new THREE.MeshBasicMaterial({ color: 0x020305 });
+  const backing = new THREE.Mesh(new THREE.BoxGeometry(1.46, 2.48, 0.08), abyssMat);
+  backing.position.set(0, 1.32, -0.18);
+  group.add(backing);
+
+  // Steel inner jamb
+  const topJamb = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.1, 0.32), frameSteelMat);
+  topJamb.position.set(0, 2.48, 0.02);
+  group.add(topJamb);
+
+  // Status beacon bulb above lintel
+  const lampHousing = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.1, 12), frameSteelMat);
+  lampHousing.rotation.x = Math.PI / 2;
+  lampHousing.position.set(0, 2.68, 0.27);
+  group.add(lampHousing);
+
+  const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), statusLampMat);
+  lampBulb.position.set(0, 2.68, 0.32);
+  group.add(lampBulb);
+
+  // Hinged Steel Basement Door Leaf (pivots at left edge x = -0.68)
+  const doorPivot = new THREE.Group();
+  doorPivot.position.set(-0.68, 0.14, 0.05);
+
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(1.36, 2.32, 0.1), doorSteelMat);
+  slab.position.set(0.68, 1.16, 0);
+  slab.castShadow = true;
+  slab.receiveShadow = true;
+  doorPivot.add(slab);
+
+  // Steel reinforcement ribs & rusted kickplate
+  [0.45, 1.25, 2.05].forEach((ry) => {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.09, 0.13), frameSteelMat);
+    rib.position.set(0.68, ry, 0);
+    doorPivot.add(rib);
+  });
+
+  const kickplate = new THREE.Mesh(new THREE.BoxGeometry(1.32, 0.38, 0.115), rustMat);
+  kickplate.position.set(0.68, 0.2, 0);
+  doorPivot.add(kickplate);
+
+  // Barred basement peephole window
+  const winPane = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.36, 0.12), windowMat);
+  winPane.position.set(0.68, 1.72, 0);
+  doorPivot.add(winPane);
+
+  [-0.12, 0, 0.12].forEach((bx) => {
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.38, 6), frameSteelMat);
+    bar.position.set(0.68 + bx, 1.72, 0.065);
+    doorPivot.add(bar);
+  });
+
+  // Heavy lever handle
+  const handleBase = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.04), frameSteelMat);
+  handleBase.position.set(1.2, 1.08, 0.065);
+  doorPivot.add(handleBase);
+
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 0.04), rustMat);
+  lever.position.set(1.14, 1.08, 0.095);
+  doorPivot.add(lever);
+
+  group.add(doorPivot);
+
+  // Padlock & Chain Assembly (hidden once 4 keys unlock the basement door)
+  const lockMesh = new THREE.Group();
+  const chainBar = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.08, 0.06), rustMat);
+  chainBar.position.set(0, 1.22, 0.16);
+  chainBar.rotation.z = -0.06;
+  lockMesh.add(chainBar);
+
+  const padlock = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.08), frameSteelMat);
+  padlock.position.set(0.52, 1.14, 0.2);
+  lockMesh.add(padlock);
+
+  const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.018, 6, 12, Math.PI), rustMat);
+  shackle.position.set(0.52, 1.26, 0.2);
+  lockMesh.add(shackle);
+
+  lockMesh.visible = !unlocked;
+  group.add(lockMesh);
+
+  return { group, doorPivot, lockMesh, statusLampMat, windowMat };
+}
+
+export function createBlessedSwordViewModel(): THREE.Group {
+  const pivot = new THREE.Group();
+
+  const gripMat = new THREE.MeshStandardMaterial({
+    color: 0x181014,
+    roughness: 0.85,
+    metalness: 0.08,
+  });
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    emissive: 0x78350f,
+    emissiveIntensity: 0.45,
+    roughness: 0.24,
+    metalness: 0.88,
+  });
+  const bladeMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    roughness: 0.14,
+    metalness: 0.94,
+  });
+  const sacredEdgeMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    emissive: 0xef4444,
+    emissiveIntensity: 1.35,
+    roughness: 0.2,
+    metalness: 0.65,
+  });
+  const cordMat = new THREE.MeshStandardMaterial({
+    color: 0x991b1b,
+    roughness: 0.72,
+  });
+
+  // Pommel cap & Hilt (Tsuka)
+  const pommel = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.04, 8), goldMat);
+  pommel.position.set(0, -0.15, 0);
+  pivot.add(pommel);
+
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.28, 10), gripMat);
+  grip.position.set(0, -0.01, 0);
+  pivot.add(grip);
+
+  // Red cord diamond wrap bands
+  for (let i = 0; i < 4; i++) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.005, 6, 10), cordMat);
+    band.rotation.x = Math.PI / 2;
+    band.position.set(0, -0.1 + i * 0.06, 0);
+    pivot.add(band);
+  }
+
+  // Ornate Guard (Tsuba)
+  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, 0.018, 12), goldMat);
+  tsuba.position.set(0, 0.14, 0);
+  pivot.add(tsuba);
+
+  // Curved Katana Blade Spine + Glowing Sacred Edge
+  const bladeSpine = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.82, 0.036), bladeMat);
+  bladeSpine.position.set(0, 0.56, 0.01);
+  bladeSpine.rotation.x = -0.04;
+  pivot.add(bladeSpine);
+
+  const sacredEdge = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.8, 0.016), sacredEdgeMat);
+  sacredEdge.position.set(0, 0.56, -0.012);
+  sacredEdge.rotation.x = -0.04;
+  pivot.add(sacredEdge);
+
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.14, 4), bladeMat);
+  tip.position.set(0, 1.03, 0.02);
+  tip.scale.set(0.45, 1, 1);
+  pivot.add(tip);
+
+  return pivot;
+}
+
+export function createCavernStalagmite(inverted = false): THREE.Group {
+  const group = new THREE.Group();
+  const rockMat = new THREE.MeshStandardMaterial({
+    color: 0x1c1a20,
+    roughness: 0.94,
+    metalness: 0.08,
+  });
+  const mossMat = new THREE.MeshStandardMaterial({
+    color: 0x3b1216,
+    roughness: 0.9,
+  });
+
+  const mainCone = new THREE.Mesh(new THREE.ConeGeometry(0.68, 2.55, 7), rockMat);
+  mainCone.position.y = 1.27;
+  mainCone.castShadow = true;
+  mainCone.receiveShadow = true;
+  group.add(mainCone);
+
+  const sideA = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.65, 6), mossMat);
+  sideA.position.set(0.44, 0.82, 0.25);
+  sideA.rotation.z = -0.14;
+  group.add(sideA);
+
+  const sideB = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.32, 6), rockMat);
+  sideB.position.set(-0.38, 0.66, -0.22);
+  sideB.rotation.z = 0.16;
+  group.add(sideB);
+
+  if (inverted) {
+    group.rotation.x = Math.PI;
+  }
+  return group;
+}
+
+export function createCavernCrystalCluster(): { group: THREE.Group; light: THREE.PointLight } {
+  const group = new THREE.Group();
+  const baseMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.92 });
+  const crystalMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: 0x991b1b,
+    emissiveIntensity: 1.25,
+    roughness: 0.22,
+    metalness: 0.35,
+  });
+
+  const base = new THREE.Mesh(new THREE.DodecahedronGeometry(0.48, 0), baseMat);
+  base.scale.set(1.2, 0.55, 1.2);
+  base.position.y = 0.22;
+  group.add(base);
+
+  const shards = [
+    { x: 0, z: 0, h: 1.35, r: 0.15, rx: 0.08, rz: -0.05 },
+    { x: 0.24, z: 0.12, h: 0.95, r: 0.11, rx: 0.25, rz: -0.35 },
+    { x: -0.22, z: -0.1, h: 0.85, r: 0.1, rx: -0.22, rz: 0.3 },
+  ];
+  shards.forEach((s) => {
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(s.r, s.h, 5), crystalMat);
+    shard.position.set(s.x, 0.3 + s.h * 0.45, s.z);
+    shard.rotation.set(s.rx, 0, s.rz);
+    group.add(shard);
+  });
+
+  const light = new THREE.PointLight(0xdc2626, 1.35, 9.5, 1.7);
+  light.position.set(0, 1.25, 0);
+  group.add(light);
+
+  return { group, light };
+}
+
+export function createBossWebOrb(): THREE.Group {
+  const group = new THREE.Group();
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: 0xfef2f2,
+    emissive: 0xdc2626,
+    emissiveIntensity: 2.2,
+    roughness: 0.2,
+  });
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: 0x7f1d1d,
+    emissive: 0x991b1b,
+    emissiveIntensity: 0.95,
+    transparent: true,
+    opacity: 0.72,
+    roughness: 0.3,
+  });
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), coreMat);
+  group.add(core);
+  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 0), shellMat);
+  group.add(shell);
+  return group;
+}
+
+export function createTelegraphRing(): THREE.Mesh {
+  const geo = new THREE.RingGeometry(0.84, 1.0, 36);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xef4444,
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  ring.visible = false;
+  return ring;
+}
+
+export function createBossShieldAura(): THREE.Group {
+  const group = new THREE.Group();
+
+  const shellMat = new THREE.MeshBasicMaterial({
+    color: 0xdc2626,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+  });
+  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(1.78, 1), shellMat);
+  shell.position.y = 1.65;
+  group.add(shell);
+
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xf87171,
+    transparent: true,
+    opacity: 0.68,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.76, 36), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.08;
+  group.add(ring);
+
+  return group;
+}
+
+export function createExpandingShockwave(colorHex = 0xef4444): THREE.Group {
+  const group = new THREE.Group();
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const torusMat = new THREE.MeshBasicMaterial({
+    color: 0xfef2f2,
+    transparent: true,
+    opacity: 0.75,
+    depthWrite: false,
+  });
+
+  const flatRing = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.0, 40), ringMat);
+  flatRing.rotation.x = -Math.PI / 2;
+  flatRing.position.y = 0.09;
+  group.add(flatRing);
+
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(0.88, 0.06, 8, 36), torusMat);
+  torus.rotation.x = Math.PI / 2;
+  torus.position.y = 0.22;
+  group.add(torus);
+
+  return group;
+}
+
+export function createCrimsonSpikePillar(): THREE.Group {
+  const group = new THREE.Group();
+  const spikeMat = new THREE.MeshStandardMaterial({
+    color: 0x991b1b,
+    emissive: 0xdc2626,
+    emissiveIntensity: 1.5,
+    roughness: 0.24,
+    metalness: 0.35,
+  });
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: 0xfef2f2,
+    transparent: true,
+    opacity: 0.75,
+  });
+
+  const main = new THREE.Mesh(new THREE.ConeGeometry(0.46, 3.6, 6), spikeMat);
+  main.position.y = 1.8;
+  group.add(main);
+
+  const shardA = new THREE.Mesh(new THREE.ConeGeometry(0.28, 2.1, 5), spikeMat);
+  shardA.position.set(0.32, 0.95, 0.18);
+  shardA.rotation.set(0.18, 0, -0.26);
+  group.add(shardA);
+
+  const shardB = new THREE.Mesh(new THREE.ConeGeometry(0.24, 1.85, 5), coreMat);
+  shardB.position.set(-0.28, 0.85, -0.15);
+  shardB.rotation.set(-0.2, 0, 0.24);
+  group.add(shardB);
+
+  return group;
+}
+
+export function createGroundWarningDisc(): THREE.Group {
+  const group = new THREE.Group();
+  const fillMat = new THREE.MeshBasicMaterial({
+    color: 0x991b1b,
+    transparent: true,
+    opacity: 0.34,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const edgeMat = new THREE.MeshBasicMaterial({
+    color: 0xf87171,
+    transparent: true,
+    opacity: 0.88,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(0.92, 24), fillMat);
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 0.05;
+  group.add(disc);
+
+  const edge = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.0, 28), edgeMat);
+  edge.rotation.x = -Math.PI / 2;
+  edge.position.y = 0.07;
+  group.add(edge);
+
+  return group;
+}
