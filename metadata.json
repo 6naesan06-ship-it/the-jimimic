@@ -1,0 +1,6 @@
+{
+  "name": "THE MIMIC: 지배의 서",
+  "description": "로블록스 더 미믹(The Mimic)의 세계관, 등장인물, 괴물들을 바탕으로 제작된 3D 1인칭 일본식 생존 공포 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
