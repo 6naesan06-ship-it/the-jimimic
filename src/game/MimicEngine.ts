@@ -537,10 +537,11 @@ export class MimicEngine {
     if (this.mode !== 'playing' || this.chapterId !== 4) return;
     if (this.swordCooldown > 0) return;
 
+    const isHacker = this.jobId === 'hacker';
     const isDev = this.jobId === 'developer';
-    this.swordSwingDuration = isDev ? 0.2 : 0.28;
+    this.swordSwingDuration = isHacker ? 0.18 : isDev ? 0.2 : 0.28;
     this.swordSwingTimer = this.swordSwingDuration;
-    this.swordCooldown = isDev ? 0.25 : 0.42;
+    this.swordCooldown = isHacker ? 0.22 : isDev ? 0.25 : 0.42;
     this.swordHitApplied = false;
     soundEngine.playSwordSwing();
   }
@@ -683,6 +684,67 @@ export class MimicEngine {
         return;
       }
       this.callbacks.onSystemNotice('시스템 지배! 모든 괴물을 12초간 강제 정지시켰습니다.');
+    } else if (this.jobId === 'hacker') {
+      for (const m of this.monsters) {
+        m.stunTimer = 15.0;
+        m.state = 'patrol';
+        m.memoryTimer = 0;
+      }
+      this.skillActiveTimer = 10.0;
+      this.stamina = this.maxStamina;
+      this.battery = 100;
+      this.playerHp = this.playerMaxHp;
+
+      if (this.chapterId === 4) {
+        for (const p of this.bossProjectiles) {
+          this.worldGroup.remove(p.mesh);
+        }
+        this.bossProjectiles = [];
+        this.stunSaigomo(5.0, '시스템 백도어! 보스 탄막 삭제 · 결계 파괴(-250 HP) 및 5초 스턴!');
+        this.damageBoss(250);
+        return;
+      }
+
+      if (!this.exitUnlocked) {
+        let hackedCount = 0;
+        for (const item of this.collectibles) {
+          if (item.collected) continue;
+          if (item.kind === 'battery' || item.kind === 'diary') continue;
+          this.collectItemEntity(item);
+          hackedCount++;
+        }
+        if (hackedCount > 0) {
+          this.callbacks.onSystemNotice(
+            `시스템 백도어! 전 괴물 15초 마비 및 맵의 남은 봉인 ${hackedCount}개를 일괄 해킹했습니다!`
+          );
+          return;
+        }
+      } else if (this.mapData) {
+        const dirs = [
+          [0, -1],
+          [-1, 0],
+          [1, 0],
+          [0, 1],
+        ];
+        for (const [ox, oz] of dirs) {
+          const tx = this.mapData.exitTile.gx + ox;
+          const tz = this.mapData.exitTile.gz + oz;
+          if (!isWall(tx, tz, this.mapData)) {
+            const safePos = gridToWorld(tx, tz, this.mapData);
+            this.playerX = safePos.x;
+            this.playerZ = safePos.z;
+            this.yaw = Math.atan2(-(this.exitPos.x - this.playerX), -(this.exitPos.z - this.playerZ));
+            break;
+          }
+        }
+        this.callbacks.onSystemNotice(
+          this.chapterId === 1
+            ? '시스템 백도어! 전 괴물 15초 마비 및 지하실 문 앞 안전 지대로 워프했습니다!'
+            : '시스템 백도어! 전 괴물 15초 마비 및 탈출 도리이 앞 안전 지대로 워프했습니다!'
+        );
+        return;
+      }
+      this.callbacks.onSystemNotice('시스템 백도어! 전 괴물을 15초간 강제 마비시켰습니다.');
     }
   }
 
@@ -875,10 +937,11 @@ export class MimicEngine {
         : 999999;
     this.keys.clear();
 
-    const isDev = jobId === 'developer';
+    const isHacker = jobId === 'hacker';
+    const isGodJob = jobId === 'developer' || isHacker;
 
     // Configure Job Flashlight Optics
-    if (isDev) {
+    if (isGodJob) {
       this.flashlight.distance = 68;
       this.flashlight.angle = Math.PI / 2.8;
     } else if (jobId === 'police') {
@@ -891,23 +954,23 @@ export class MimicEngine {
 
     // Dark base illumination so flashlight is needed, while allowing the stronger beam to cut through fog
     const fogDensity = isBossFight
-      ? isDev
-        ? 0.024
+      ? isGodJob
+        ? 0.022
         : 0.038
-      : isDev
-        ? meta.fogDensity * 0.52
+      : isGodJob
+        ? meta.fogDensity * 0.48
         : meta.fogDensity * 0.8;
     this.scene.background = new THREE.Color(meta.fogColor);
     this.scene.fog = new THREE.FogExp2(meta.fogColor, fogDensity);
-    this.scene.environmentIntensity = isDev ? 0.45 : isBossFight ? 0.18 : 0.11;
+    this.scene.environmentIntensity = isGodJob ? 0.46 : isBossFight ? 0.18 : 0.11;
     this.ambientLight.color.setHex(meta.ambientColor);
-    this.ambientLight.intensity = isDev ? 0.34 : isBossFight ? 0.16 : 0.07;
-    this.hemiLight.intensity = isDev ? 0.38 : isBossFight ? 0.16 : 0.09;
+    this.ambientLight.intensity = isGodJob ? 0.36 : isBossFight ? 0.16 : 0.07;
+    this.hemiLight.intensity = isGodJob ? 0.4 : isBossFight ? 0.16 : 0.09;
 
-    if (isDev) {
-      this.playerFillLight.color.setHex(0xe0f2fe);
-      this.playerFillLight.intensity = 2.6;
-      this.playerFillLight.distance = 15.0;
+    if (isGodJob) {
+      this.playerFillLight.color.setHex(isHacker ? 0xa5f3fc : 0xe0f2fe);
+      this.playerFillLight.intensity = isHacker ? 2.8 : 2.6;
+      this.playerFillLight.distance = 16.0;
     } else {
       this.playerFillLight.color.setHex(isBossFight ? 0x7f2d34 : 0x475569);
       this.playerFillLight.intensity = isBossFight ? 0.48 : 0.34;
@@ -1699,14 +1762,18 @@ export class MimicEngine {
     if (survived) {
       this.invulnTimer = Math.max(this.invulnTimer, 2.0);
       soundEngine.playKintoruControlEscape();
-      this.callbacks.onSystemNotice('⚡ 킨토루의 지배에서 벗어났습니다! (3초 버티기 성공)');
+      this.callbacks.onSystemNotice('⚡ 킨토루의 지배에서 벗어났습니다! (6초 버티기 성공)');
       return;
     }
 
-    if (this.jobId === 'developer') {
+    if (this.jobId === 'developer' || this.jobId === 'hacker') {
       this.invulnTimer = 2.5;
       soundEngine.playPortalUnlock();
-      this.callbacks.onSystemNotice('관리자 권한! 킨토루의 정신 지배를 강제로 끊어냈습니다!');
+      this.callbacks.onSystemNotice(
+        this.jobId === 'hacker'
+          ? '방화벽 가동! 킨토루의 정신 해킹을 역추적해 차단했습니다!'
+          : '관리자 권한! 킨토루의 정신 지배를 강제로 끊어냈습니다!'
+      );
       return;
     }
 
@@ -1782,7 +1849,9 @@ export class MimicEngine {
     moveRight += this.touchMoveX;
 
     const isMoving = Math.abs(moveForward) > 0.05 || Math.abs(moveRight) > 0.05;
+    const isHacker = this.jobId === 'hacker';
     const isDeveloper = this.jobId === 'developer';
+    const isGodJob = isDeveloper || isHacker;
     const studentBoost = this.jobId === 'student' && this.skillActiveTimer > 0;
     const wantsSprint =
       (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
@@ -1790,7 +1859,7 @@ export class MimicEngine {
       !this.crouching &&
       !this.exhausted;
 
-    if (isDeveloper || studentBoost) {
+    if (isGodJob || studentBoost) {
       this.stamina = this.maxStamina;
       this.exhausted = false;
     } else if (wantsSprint) {
@@ -1806,8 +1875,11 @@ export class MimicEngine {
     }
 
     const sprinting = wantsSprint && this.stamina > 0;
-    const jobSpeedMult =
-      isDeveloper
+    const jobSpeedMult = isHacker
+      ? this.skillActiveTimer > 0
+        ? 2.2
+        : 1.75
+      : isDeveloper
         ? this.skillActiveTimer > 0
           ? 2.05
           : 1.65
@@ -1878,7 +1950,7 @@ export class MimicEngine {
     // Flashlight & Battery (Job-aware)
     const baseDrain = this.difficulty === 'nightmare' ? 2.4 : 1.55;
     const drainMult =
-      isDeveloper
+      isGodJob
         ? 0
         : this.jobId === 'exorcist'
           ? 0.55
@@ -1979,10 +2051,10 @@ export class MimicEngine {
           ? 11.0
           : 8.6;
     const stealthMult =
-      isDeveloper && this.skillActiveTimer > 0
+      isGodJob && this.skillActiveTimer > 0
         ? 0.0
-        : isDeveloper
-          ? 0.55
+        : isGodJob
+          ? 0.48
           : this.jobId === 'doctor'
             ? 0.78
             : 1.0;
@@ -1990,7 +2062,7 @@ export class MimicEngine {
 
     if (this.chapterId === 4) {
       this.updateSwordViewModel(dt, elapsed, isMoving);
-      const bossDead = this.updateChapter4BossFight(dt, elapsed, isDeveloper);
+      const bossDead = this.updateChapter4BossFight(dt, elapsed, isGodJob);
       if (bossDead || this.mode !== 'playing') return;
 
       for (const m of this.monsters) {
@@ -2015,16 +2087,18 @@ export class MimicEngine {
           continue;
         }
 
-        // Check Catch -> Developer God Shield, Doctor Second Chance, or Jumpscare!
+        // Check Catch -> Developer/Hacker God Shield, Doctor Second Chance, or Jumpscare!
         if (distToPlayer < 1.18 && this.invulnTimer <= 0) {
-          if (isDeveloper) {
-            this.invulnTimer = 1.5;
-            m.stunTimer = 5.0;
+          if (isGodJob) {
+            this.invulnTimer = 1.6;
+            m.stunTimer = isHacker ? 7.0 : 5.0;
             m.state = 'patrol';
             m.memoryTimer = 0;
             soundEngine.playPortalUnlock();
             this.callbacks.onSystemNotice(
-              '관리자 무적 실드! 괴물의 공격을 반사하고 5초간 경직시켰습니다.'
+              isHacker
+                ? '해커 방화벽 역공! 괴물을 7초간 시스템 마비시켰습니다.'
+                : '관리자 무적 실드! 괴물의 공격을 반사하고 5초간 경직시켰습니다.'
             );
             continue;
           }
@@ -2120,20 +2194,20 @@ export class MimicEngine {
       }
     }
 
-    // Flashlight flicker when low battery or monster nearby (Developer never flickers)
+    // Flashlight flicker when low battery or monster nearby (Developer/Hacker never flicker)
     if (this.flashlightOn) {
       let flicker = 1;
-      if (!isDeveloper && (this.battery < 18 || minMonsterDist < 8.5)) {
+      if (!isGodJob && (this.battery < 18 || minMonsterDist < 8.5)) {
         flicker = Math.sin(elapsed * 37) > -0.6 ? 1 : 0.38;
       }
-      const baseBeam = isDeveloper ? 36.0 : this.jobId === 'police' ? 28.0 : 22.0;
+      const baseBeam = isGodJob ? 36.0 : this.jobId === 'police' ? 28.0 : 22.0;
       this.flashlight.intensity = baseBeam * flicker;
-      if (!isDeveloper) {
+      if (!isGodJob) {
         this.playerFillLight.intensity = (this.chapterId === 4 ? 0.55 : 0.42) * flicker;
       }
     } else {
       this.flashlight.intensity = 0;
-      if (!isDeveloper) {
+      if (!isGodJob) {
         this.playerFillLight.intensity = this.chapterId === 4 ? 0.22 : 0.14;
       }
     }
@@ -2240,6 +2314,7 @@ export class MimicEngine {
   private performSwordHitCheck() {
     const fwdX = -Math.sin(this.yaw);
     const fwdZ = -Math.cos(this.yaw);
+    const isHacker = this.jobId === 'hacker';
     const isDev = this.jobId === 'developer';
 
     for (const m of this.monsters) {
@@ -2256,7 +2331,7 @@ export class MimicEngine {
         const isStunned = this.bossStunTimer > 0;
 
         if (isStunned) {
-          const dmg = isDev ? 75 : 50;
+          const dmg = isHacker ? 100 : isDev ? 75 : 50;
           this.bossHitsLanded++;
           soundEngine.playSwordHit(true);
           this.spawnShockwave(m.x, m.z, 2.2, 0xf59e0b, 0.28);
@@ -2328,10 +2403,17 @@ export class MimicEngine {
   private applyPlayerDamage(amount: number, attackerId: MonsterId) {
     if (this.invulnTimer > 0) return;
 
-    if (this.jobId === 'developer') {
+    if (this.jobId === 'developer' || this.jobId === 'hacker') {
       this.invulnTimer = 1.2;
       const boss = this.monsters.find((m) => m.id === 'saigomo');
-      if (boss) this.stunSaigomo(3.0, '관리자 무적 실드! 공격을 반사해 사이고모를 3초간 스턴시켰습니다!');
+      if (boss) {
+        this.stunSaigomo(
+          3.0,
+          this.jobId === 'hacker'
+            ? '해커 방화벽 반사! 보스의 공격을 역해킹해 사이고모를 3초간 스턴시켰습니다!'
+            : '관리자 무적 실드! 공격을 반사해 사이고모를 3초간 스턴시켰습니다!'
+        );
+      }
       return;
     }
 
@@ -2853,7 +2935,7 @@ export class MimicEngine {
     let nearestObjectiveDist: number | null = null;
     let nearestObjectiveAngleDeg: number | null = null;
 
-    if (this.jobId === 'exorcist' || this.jobId === 'developer') {
+    if (this.jobId === 'exorcist' || this.jobId === 'developer' || this.jobId === 'hacker') {
       let targetX: number | null = null;
       let targetZ: number | null = null;
       if (this.chapterId === 4) {

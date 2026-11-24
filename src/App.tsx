@@ -79,6 +79,7 @@ export default function App() {
   const [selectedJob, setSelectedJob] = useState<JobId>('student');
   const [clearedChapters, setClearedChapters] = useState<number[]>([]);
   const [devUnlocked, setDevUnlocked] = useState<boolean>(false);
+  const [hackerUnlocked, setHackerUnlocked] = useState<boolean>(false);
   const [difficulty, setDifficulty] = useState<DifficultyMode>('normal');
   const [muted, setMuted] = useState<boolean>(false);
   const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
@@ -256,15 +257,16 @@ export default function App() {
 
   const handleOpenIntro = () => {
     if (!isChapterUnlocked(selectedChapter, clearedChapters)) return;
-    if (!isJobUnlocked(selectedJob, clearedChapters, devUnlocked)) return;
+    if (!isJobUnlocked(selectedJob, clearedChapters, devUnlocked, hackerUnlocked)) return;
     soundEngine.init();
     setIntroSceneIdx(0);
     setScreen('intro');
   };
 
-  const handleUnlockDevWithCode = (code: string): boolean => {
+  const handleUnlockSecretJob = (jobId: 'developer' | 'hacker', code: string): boolean => {
     if (code.trim() === '4751') {
-      setDevUnlocked(true);
+      if (jobId === 'developer') setDevUnlocked(true);
+      else setHackerUnlocked(true);
       return true;
     }
     return false;
@@ -272,7 +274,7 @@ export default function App() {
 
   const handleBeginChapter = (chapterId = selectedChapter) => {
     if (!isChapterUnlocked(chapterId, clearedChapters)) return;
-    const jobToUse = isJobUnlocked(selectedJob, clearedChapters, devUnlocked)
+    const jobToUse = isJobUnlocked(selectedJob, clearedChapters, devUnlocked, hackerUnlocked)
       ? selectedJob
       : 'student';
     soundEngine.init();
@@ -324,11 +326,12 @@ export default function App() {
           selectedJob={selectedJob}
           clearedChapters={clearedChapters}
           devUnlocked={devUnlocked}
+          hackerUnlocked={hackerUnlocked}
           difficulty={difficulty}
           muted={muted}
           onSelectChapter={setSelectedChapter}
           onSelectJob={setSelectedJob}
-          onUnlockDevWithCode={handleUnlockDevWithCode}
+          onUnlockSecretJob={handleUnlockSecretJob}
           onSelectDifficulty={setDifficulty}
           onStartGame={handleOpenIntro}
           onOpenCodex={() => setCodexOpen(true)}

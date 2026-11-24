@@ -7,11 +7,12 @@ interface TitleScreenProps {
   selectedJob: JobId;
   clearedChapters: number[];
   devUnlocked: boolean;
+  hackerUnlocked: boolean;
   difficulty: DifficultyMode;
   muted: boolean;
   onSelectChapter: (id: number) => void;
   onSelectJob: (job: JobId) => void;
-  onUnlockDevWithCode: (code: string) => boolean;
+  onUnlockSecretJob: (jobId: 'developer' | 'hacker', code: string) => boolean;
   onSelectDifficulty: (mode: DifficultyMode) => void;
   onStartGame: () => void;
   onOpenCodex: () => void;
@@ -23,17 +24,19 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   selectedJob,
   clearedChapters,
   devUnlocked,
+  hackerUnlocked,
   difficulty,
   muted,
   onSelectChapter,
   onSelectJob,
-  onUnlockDevWithCode,
+  onUnlockSecretJob,
   onSelectDifficulty,
   onStartGame,
   onOpenCodex,
   onToggleMute,
 }) => {
   const [codeModalOpen, setCodeModalOpen] = useState(false);
+  const [codeTargetJob, setCodeTargetJob] = useState<'developer' | 'hacker'>('developer');
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(false);
 
@@ -42,22 +45,30 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
   const handleJobClick = (jobId: JobId) => {
     if (jobId === 'developer' && !devUnlocked) {
+      setCodeTargetJob('developer');
       setCodeInput('');
       setCodeError(false);
       setCodeModalOpen(true);
       return;
     }
-    if (!isJobUnlocked(jobId, clearedChapters, devUnlocked)) return;
+    if (jobId === 'hacker' && !hackerUnlocked) {
+      setCodeTargetJob('hacker');
+      setCodeInput('');
+      setCodeError(false);
+      setCodeModalOpen(true);
+      return;
+    }
+    if (!isJobUnlocked(jobId, clearedChapters, devUnlocked, hackerUnlocked)) return;
     onSelectJob(jobId);
   };
 
   const handleSubmitCode = (e: React.FormEvent) => {
     e.preventDefault();
-    const ok = onUnlockDevWithCode(codeInput);
+    const ok = onUnlockSecretJob(codeTargetJob, codeInput);
     if (ok) {
       setCodeModalOpen(false);
       setCodeError(false);
-      onSelectJob('developer');
+      onSelectJob(codeTargetJob);
     } else {
       setCodeError(true);
     }
@@ -226,7 +237,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2">
               {JOBS.map((job) => {
                 const isSelected = selectedJob === job.id;
-                const unlocked = isJobUnlocked(job.id, clearedChapters, devUnlocked);
+                const unlocked = isJobUnlocked(job.id, clearedChapters, devUnlocked, hackerUnlocked);
 
                 return (
                   <button
@@ -297,7 +308,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-zinc-100">
                 <KeyRound className="w-4 h-4 text-red-400" />
-                <h3 className="text-base font-serif-kr font-bold">개발자 인증</h3>
+                <h3 className="text-base font-serif-kr font-bold">
+                  {codeTargetJob === 'hacker' ? '해커 인증' : '개발자 인증'}
+                </h3>
               </div>
               <button
                 type="button"
@@ -310,7 +323,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             </div>
 
             <p className="text-xs text-zinc-400">
-              개발자 직업을 잠금 해제하려면 4자리 숫자 인증 코드를 입력하십시오.
+              {codeTargetJob === 'hacker' ? '해커' : '개발자'} 직업을 잠금 해제하려면 4자리 숫자 인증 코드를 입력하십시오.
             </p>
 
             <input

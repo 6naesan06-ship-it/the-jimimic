@@ -1,6 +1,6 @@
 export type MonsterId = 'shizu' | 'biwaki' | 'megumi' | 'oomukade' | 'saigomo' | 'keiko';
 export type DifficultyMode = 'normal' | 'nightmare';
-export type JobId = 'student' | 'doctor' | 'police' | 'exorcist' | 'developer';
+export type JobId = 'student' | 'doctor' | 'police' | 'exorcist' | 'developer' | 'hacker';
 
 export interface JobMeta {
   id: JobId;
@@ -82,6 +82,19 @@ export const JOBS: JobMeta[] = [
     cooldownSec: 4,
     accentColor: '#ef4444',
   },
+  {
+    id: 'hacker',
+    name: '해커',
+    englishTitle: 'Secret · Hacker',
+    unlockType: 'code',
+    unlockLabel: '비밀 코드로 잠금 해제',
+    summary: '비밀 코드로 봉인된 최강 사이버 침투자. 방화벽 무적, 초고속 기동, 맵 전체 봉인 일괄 해킹 능력을 지닙니다.',
+    passiveLabel: '방화벽 무적(사망 면역) · 야간 투시 · 무한 스태미나/배터리 · 이속 +75% · 검 피해 2배 · 나침반',
+    activeSkillName: '시스템 백도어',
+    activeSkillDesc: '전 괴물 15초 마비 + 남은 봉인 일괄 해킹 (해제 후 사용 시 출구 순간이동) / 4장 보스 결계 즉시 파괴(-250 HP · 5초 스턴).',
+    cooldownSec: 4,
+    accentColor: '#22d3ee',
+  },
 ];
 
 export function isChapterUnlocked(chapterId: number, clearedChapters: number[]): boolean {
@@ -92,13 +105,15 @@ export function isChapterUnlocked(chapterId: number, clearedChapters: number[]):
 export function isJobUnlocked(
   jobId: JobId,
   clearedChapters: number[],
-  devUnlocked: boolean
+  devUnlocked: boolean,
+  hackerUnlocked = false
 ): boolean {
   if (jobId === 'student') return true;
   if (jobId === 'doctor') return clearedChapters.includes(1);
   if (jobId === 'police') return clearedChapters.includes(2);
   if (jobId === 'exorcist') return [1, 2, 3, 4].every((id) => clearedChapters.includes(id));
   if (jobId === 'developer') return devUnlocked;
+  if (jobId === 'hacker') return hackerUnlocked;
   return false;
 }
 
@@ -744,7 +759,7 @@ export const DIARIES: DiaryEntry[] = [
     content: [
       '“네가 그토록 찾아 헤매던 6명의 친구들은 이미 내가 먹어 치웠다.”',
       '“너희 선조 쿠스노키의 죄로 인형이 된 네 조상들이다.”',
-      '경고: 2장 이후부터는 중간중간 킨토루가 직접 정신을 침식하려 손을 뻗는다. 다가오는 손을 마우스로 터치해 3초 동안 버텨내야 한다.'
+      '경고: 2장 이후부터는 중간중간 킨토루가 직접 정신을 침식하려 손을 뻗는다. 다가오는 손을 마우스로 터치해 6초 동안 버텨내야 한다.'
     ],
   },
   {

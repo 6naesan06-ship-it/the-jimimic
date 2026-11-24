@@ -163,11 +163,15 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         )}
 
-        {/* Developer Overdrive indicator */}
-        {hud.jobId === 'developer' && (
+        {/* Developer / Hacker Overdrive indicator */}
+        {(hud.jobId === 'developer' || hud.jobId === 'hacker') && (
           <div className="flex items-center gap-1.5 pt-1 text-xs text-cyan-300">
             <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-            <span>관리자 권한: 사망 면역 · 야간 투시 활성</span>
+            <span>
+              {hud.jobId === 'hacker'
+                ? '방화벽 가동: 사망 면역 · 야간 투시 · 백도어 활성'
+                : '관리자 권한: 사망 면역 · 야간 투시 활성'}
+            </span>
           </div>
         )}
 
@@ -296,7 +300,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 <span>야스의 체력</span>
               </span>
               <span className="font-mono-tabular text-zinc-200 font-semibold">
-                {hud.jobId === 'developer' ? '∞' : `${Math.round(hud.playerHp)} / ${hud.playerMaxHp}`}
+                {hud.jobId === 'developer' || hud.jobId === 'hacker'
+                  ? '∞'
+                  : `${Math.round(hud.playerHp)} / ${hud.playerMaxHp}`}
               </span>
             </div>
             <div className="h-2 bg-zinc-800 rounded-sm overflow-hidden">
@@ -304,7 +310,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                 className={`h-full transition-all duration-150 ${
                   playerHpPct < 30 ? 'bg-red-500' : 'bg-emerald-500'
                 }`}
-                style={{ width: `${hud.jobId === 'developer' ? 100 : playerHpPct}%` }}
+                style={{
+                  width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : playerHpPct}%`,
+                }}
               />
             </div>
           </div>
@@ -317,7 +325,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <span>손전등 [F] · {hud.flashlightOn ? '켜짐' : '꺼짐'}</span>
             </span>
             <span className="font-mono-tabular text-zinc-300">
-              {hud.jobId === 'developer' ? '∞' : `${Math.round(hud.battery)}%`}
+              {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : `${Math.round(hud.battery)}%`}
             </span>
           </div>
           <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
@@ -336,7 +344,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               스태미나 [Shift] · {hud.crouching ? '은신 자세' : '서 있음'}
             </span>
             <span className="font-mono-tabular text-zinc-300">
-              {hud.jobId === 'developer' ? '∞' : Math.round(hud.stamina)}
+              {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : Math.round(hud.stamina)}
             </span>
           </div>
           <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">

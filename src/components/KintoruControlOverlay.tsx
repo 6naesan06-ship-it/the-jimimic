@@ -23,7 +23,7 @@ interface ClickBurst {
   age: number;
 }
 
-const SURVIVAL_SECONDS = 3.0;
+const SURVIVAL_SECONDS = 6.0;
 const GRAB_THRESHOLD = 0.07;
 
 function createInitialHands(chapterId: number): ApproachingHand[] {
@@ -193,7 +193,7 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
         </h2>
         <p className="text-xs text-zinc-300">
           다가오는 손을 마우스로 빠르게 터치(클릭)해{' '}
-          <span className="text-amber-300 font-semibold">3초</span> 동안 버티십시오!
+          <span className="text-amber-300 font-semibold">6초</span> 동안 버티십시오!
         </p>
         <div className="space-y-1 pt-0.5">
           <div className="h-2.5 bg-zinc-900 border border-red-900/70 rounded-sm overflow-hidden">
@@ -203,7 +203,7 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
             />
           </div>
           <p className="font-mono-tabular text-xs font-bold text-amber-300">
-            버티기 남은 시간: {remaining.toFixed(1)}s / 3.0s
+            버티기 남은 시간: {remaining.toFixed(1)}s / 6.0s
           </p>
         </div>
       </div>
