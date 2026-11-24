@@ -689,6 +689,61 @@ class HorrorSoundEngine {
     osc.start(now);
     osc.stop(now + 0.36);
   }
+
+  public playKintoruControlStart() {
+    if (!this.ctx || !this.masterGain || this.muted) return;
+    const now = this.ctx.currentTime;
+    // Eerie dissonant whisper & low mind-grip swell
+    [146.83, 155.56, 293.66, 622.25].forEach((f, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx < 2 ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(f * 1.04, now);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.86, now + 0.65);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(idx < 2 ? 0.14 : 0.1, now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.72);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.75);
+    });
+  }
+
+  public playHandBanish() {
+    if (!this.ctx || !this.masterGain || this.muted) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(860, now);
+    osc.frequency.exponentialRampToValueAtTime(210, now + 0.14);
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.17);
+  }
+
+  public playKintoruControlEscape() {
+    if (!this.ctx || !this.masterGain || this.muted) return;
+    const now = this.ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, now + idx * 0.045);
+      gain.gain.setValueAtTime(0.16 / (idx * 0.4 + 1), now + idx * 0.045);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.045 + 0.42);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now + idx * 0.045);
+      osc.stop(now + idx * 0.045 + 0.45);
+    });
+  }
 }
 
 export const soundEngine = new HorrorSoundEngine();

@@ -93,6 +93,7 @@ export interface EngineCallbacks {
   onItemCollected: (count: number, total: number, kind: string) => void;
   onSystemNotice: (message: string) => void;
   onSubtitle: (line: CutsceneLine) => void;
+  onKintoruControlChange?: (active: boolean) => void;
 }
 
 interface CollectibleEntity {
@@ -280,9 +281,11 @@ export class MimicEngine {
   }> = [];
   private activeWallHeight = WALL_HEIGHT;
 
-  // Jumpscare state
+  // Jumpscare & Kintoru Mind-Control QTE state (Ch.2+)
   private jumpscareTimer = 0;
   private jumpscareMonster: MonsterEntity | null = null;
+  private kintoruControlActive = false;
+  private kintoruNextTimer = 0;
 
   // Title diorama references
   private titleBoss: AnimatedMonsterRig | null = null;
@@ -409,7 +412,7 @@ export class MimicEngine {
     const code = e.code;
     this.keys.add(code);
 
-    if (this.mode !== 'playing') return;
+    if (this.mode !== 'playing' || this.kintoruControlActive) return;
 
     if (code === 'KeyF') {
       this.toggleFlashlight();
@@ -440,7 +443,7 @@ export class MimicEngine {
   };
 
   private handleMouseDown = (e: MouseEvent) => {
-    if (this.mode !== 'playing') return;
+    if (this.mode !== 'playing' || this.kintoruControlActive) return;
     soundEngine.init();
     this.isDraggingLook = true;
     this.lastPointerX = e.clientX;
@@ -469,7 +472,7 @@ export class MimicEngine {
   };
 
   private handleMouseMove = (e: MouseEvent) => {
-    if (this.mode !== 'playing') return;
+    if (this.mode !== 'playing' || this.kintoruControlActive) return;
     const sensitivity = 0.0023;
     if (this.pointerLocked) {
       this.yaw -= e.movementX * sensitivity;
@@ -739,6 +742,10 @@ export class MimicEngine {
     this.exitPortalLight = null;
     this.exitGateGroup = null;
     this.titleBoss = null;
+    if (this.kintoruControlActive) {
+      this.kintoruControlActive = false;
+      this.callbacks.onKintoruControlChange?.(false);
+    }
   }
 
   public buildTitleDiorama() {
@@ -861,6 +868,11 @@ export class MimicEngine {
     this.wasAnyChasing = false;
     this.halfSubtitleShown = false;
     this.jumpscareMonster = null;
+    this.kintoruControlActive = false;
+    this.kintoruNextTimer =
+      chapterId >= 2
+        ? (chapterId === 4 ? 17 : 13) + Math.random() * 6
+        : 999999;
     this.keys.clear();
 
     const isDev = jobId === 'developer';
@@ -1666,8 +1678,86 @@ export class MimicEngine {
     }
   }
 
+  private triggerKintoruControl() {
+    this.kintoruControlActive = true;
+    this.keys.clear();
+    this.isDraggingLook = false;
+    this.releasePointerLock();
+    this.cameraShakeTimer = 0.45;
+    this.cameraShakeStrength = 0.08;
+    soundEngine.playKintoruControlStart();
+    this.callbacks.onKintoruControlChange?.(true);
+  }
+
+  public resolveKintoruControl(survived: boolean) {
+    if (!this.kintoruControlActive) return;
+    this.kintoruControlActive = false;
+    this.callbacks.onKintoruControlChange?.(false);
+    this.kintoruNextTimer =
+      (this.chapterId === 4 ? 25 : 21) + Math.random() * 10;
+
+    if (survived) {
+      this.invulnTimer = Math.max(this.invulnTimer, 2.0);
+      soundEngine.playKintoruControlEscape();
+      this.callbacks.onSystemNotice('⚡ 킨토루의 지배에서 벗어났습니다! (3초 버티기 성공)');
+      return;
+    }
+
+    if (this.jobId === 'developer') {
+      this.invulnTimer = 2.5;
+      soundEngine.playPortalUnlock();
+      this.callbacks.onSystemNotice('관리자 권한! 킨토루의 정신 지배를 강제로 끊어냈습니다!');
+      return;
+    }
+
+    if (this.doctorReviveReady) {
+      this.doctorReviveReady = false;
+      this.invulnTimer = 3.2;
+      soundEngine.playPortalUnlock();
+      this.callbacks.onSystemNotice('의사의 응급 처치! 킨토루의 정신 침식을 1회 이겨냈습니다!');
+      return;
+    }
+
+    if (this.chapterId === 4) {
+      this.callbacks.onSystemNotice('💀 킨토루의 손아귀에 정신이 잠식당했습니다! (-45 HP)');
+      this.applyPlayerDamage(45, 'saigomo');
+    } else {
+      const killerId: MonsterId = this.chapterId === 2 ? 'megumi' : 'oomukade';
+      const killer =
+        this.monsters.find((m) => m.id === killerId) || this.monsters[0];
+      if (killer) {
+        this.triggerJumpscare(killer);
+      }
+    }
+  }
+
   private updatePlaying(dt: number, elapsed: number) {
     if (!this.mapData) return;
+
+    // During Kintoru Mind-Control QTE (Ch.2+), freeze movement & monsters while keeping trembling atmosphere alive
+    if (this.kintoruControlActive) {
+      this.animateAtmosphereParticles(dt, elapsed, this.chapterId);
+      const tremorX = Math.sin(elapsed * 42) * 0.025;
+      const tremorY = Math.cos(elapsed * 37) * 0.02;
+      this.camera.position.set(
+        this.playerX + tremorX,
+        this.eyeHeight + tremorY,
+        this.playerZ
+      );
+      this.camera.rotation.order = 'YXZ';
+      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.x = this.pitch;
+      return;
+    }
+
+    if (this.chapterId >= 2 && !(this.chapterId === 4 && this.bossStunTimer > 0)) {
+      this.kintoruNextTimer -= dt;
+      if (this.kintoruNextTimer <= 0) {
+        this.triggerKintoruControl();
+        return;
+      }
+    }
+
     this.elapsedSeconds += dt;
     if (this.skillCooldown > 0) this.skillCooldown = Math.max(0, this.skillCooldown - dt);
     if (this.skillActiveTimer > 0) this.skillActiveTimer = Math.max(0, this.skillActiveTimer - dt);

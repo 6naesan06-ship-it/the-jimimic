@@ -22,6 +22,7 @@ import { TitleScreen } from './components/TitleScreen';
 import { GameHUD } from './components/GameHUD';
 import { CodexModal } from './components/CodexModal';
 import { MonsterPortrait } from './components/MonsterPortrait';
+import { KintoruControlOverlay } from './components/KintoruControlOverlay';
 
 type ScreenState =
   | 'title'
@@ -91,6 +92,7 @@ export default function App() {
   const [subtitle, setSubtitle] = useState<CutsceneLine | null>(null);
   const [introSceneIdx, setIntroSceneIdx] = useState<number>(0);
   const [clearSceneIdx, setClearSceneIdx] = useState<number>(0);
+  const [kintoruControlActive, setKintoruControlActive] = useState<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
   const subtitleTimerRef = useRef<number | null>(null);
 
@@ -133,14 +135,17 @@ export default function App() {
         setScreen('diary');
       },
       onJumpscare: (monsterId) => {
+        setKintoruControlActive(false);
         setKillerMonster(monsterId);
         setScreen('jumpscare');
       },
       onPlayerDied: (monsterId) => {
+        setKintoruControlActive(false);
         setKillerMonster(monsterId);
         setScreen('dead');
       },
       onChapterClear: (chId, elapsed) => {
+        setKintoruControlActive(false);
         soundEngine.stopBgm();
         setClearTimeSec(elapsed);
         setClearSceneIdx(0);
@@ -194,6 +199,9 @@ export default function App() {
       },
       onSubtitle: (line) => {
         showSubtitle(line);
+      },
+      onKintoruControlChange: (active) => {
+        setKintoruControlActive(active);
       },
     });
 
@@ -271,6 +279,7 @@ export default function App() {
     setSelectedChapter(chapterId);
     setClearRewardText(null);
     setSubtitle(null);
+    setKintoruControlActive(false);
     engineRef.current?.startChapter(chapterId, difficulty, jobToUse);
     setScreen('playing');
     engineRef.current?.requestPointerLock();
@@ -294,6 +303,7 @@ export default function App() {
     setActiveDiary(null);
     setCodexOpen(false);
     setSubtitle(null);
+    setKintoruControlActive(false);
     engineRef.current?.buildTitleDiorama();
     setScreen('title');
   };
@@ -450,6 +460,17 @@ export default function App() {
           onSwordAttack={() => engineRef.current?.triggerSwordAttack()}
           onInteract={() => engineRef.current?.triggerInteract()}
           onLockPointer={() => engineRef.current?.requestPointerLock()}
+        />
+      )}
+
+      {/* Chapter 2+ Kintoru Mind-Control Hand Touch QTE */}
+      {kintoruControlActive && (screen === 'playing' || screen === 'paused') && (
+        <KintoruControlOverlay
+          paused={screen !== 'playing' || codexOpen}
+          chapterId={selectedChapter}
+          onComplete={(survived) => {
+            engineRef.current?.resolveKintoruControl(survived);
+          }}
         />
       )}
 
