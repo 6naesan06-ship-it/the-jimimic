@@ -54,8 +54,8 @@ export const CodexModal: React.FC<CodexModalProps> = ({ unlockedDiaryIds, onClos
         </div>
 
         {/* Navigation Tabs + Book Filter */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-zinc-800/70 bg-[#09090d]">
-          <div className="flex items-center gap-2 overflow-x-auto touch-pan-x">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-zinc-800/70 bg-[#09090d]">
+          <div className="flex items-center gap-2 overflow-x-auto">
             <button
               onClick={() => setTab('monsters')}
               className={`flex items-center gap-2 px-4 py-2 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -139,7 +139,7 @@ export const CodexModal: React.FC<CodexModalProps> = ({ unlockedDiaryIds, onClos
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto touch-pan-y p-4 sm:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {tab === 'monsters' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {filteredMonsters.map((m) => (

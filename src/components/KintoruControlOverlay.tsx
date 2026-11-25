@@ -169,7 +169,7 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-30 overflow-hidden select-none touch-none cursor-crosshair"
+      className="fixed inset-0 z-30 overflow-hidden select-none cursor-crosshair"
       style={{
         background: `radial-gradient(circle at center, rgba(15, 3, 8, ${0.32 + dangerIntensity * 0.28}) 22%, rgba(95, 8, 22, ${0.58 + dangerIntensity * 0.28}) 100%)`,
       }}
@@ -202,7 +202,7 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
           {chapterId >= 5 ? '엔즈카이의 질투에서 벗어나세요!' : '킨토루의 지배를 벗어나세요!'}
         </h2>
         <p className="text-xs text-zinc-300">
-          다가오는 손을 빠르게 터치하거나 클릭해{' '}
+          다가오는 손을 마우스로 빠르게 터치(클릭)해{' '}
           <span className="text-amber-300 font-semibold">6초</span> 동안 버티십시오!
         </p>
         <div className="space-y-1 pt-0.5">

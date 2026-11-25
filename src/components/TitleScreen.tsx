@@ -94,7 +94,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-20 flex flex-col justify-between p-4 sm:p-6 md:p-8 bg-gradient-to-r from-[#050406]/94 via-[#050406]/78 to-[#050406]/35 overflow-y-auto touch-pan-y">
+    <div className="fixed inset-0 z-20 flex flex-col justify-between p-5 md:p-8 bg-gradient-to-r from-[#050406]/94 via-[#050406]/78 to-[#050406]/35 overflow-y-auto">
       {/* Top Bar */}
       <header className="flex items-center justify-between gap-6 shrink-0">
         <div className="font-display text-lg md:text-xl font-bold tracking-widest text-zinc-100 whitespace-nowrap shrink-0">
@@ -373,8 +373,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       </div>
 
       {/* Footer Controls Guide */}
-      <footer className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 shrink-0 pt-2">
-        <div>PC: WASD·Shift·F·C·E·G·Q(학생)·마우스 / 모바일: 가상 조이스틱·화면 드래그·터치 버튼</div>
+      <footer className="flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-400 shrink-0">
+        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · Q 아이템 도약(학생) · 좌클릭/Space 검 베기(최종장) · 마우스 시점</div>
         <div>헤드폰 착용을 권장합니다</div>
       </footer>
 

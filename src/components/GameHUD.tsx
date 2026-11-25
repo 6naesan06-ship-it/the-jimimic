@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import {
   BookOpen,
   Compass,
   Flashlight,
-  Gamepad2,
   Heart,
   Pause,
   ShieldAlert,
@@ -31,9 +30,6 @@ interface GameHUDProps {
   onSwordAttack: () => void;
   onInteract: () => void;
   onLockPointer: () => void;
-  onTouchMove: (mx: number, my: number) => void;
-  onTouchSprint: (sprinting: boolean) => void;
-  onAdjustLook: (dx: number, dy: number) => void;
 }
 
 function formatTime(sec: number): string {
@@ -58,65 +54,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onSwordAttack,
   onInteract,
   onLockPointer,
-  onTouchMove,
-  onTouchSprint,
-  onAdjustLook,
 }) => {
-  const [isTouchDevice, setIsTouchDevice] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      window.matchMedia?.('(pointer: coarse)').matches ||
-      navigator.maxTouchPoints > 0 ||
-      'ontouchstart' in window
-    );
-  });
-  const [touchOverride, setTouchOverride] = useState<boolean | null>(null);
-  const [touchSprintActive, setTouchSprintActive] = useState<boolean>(false);
-  const [stickOffset, setStickOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const joyZoneRef = useRef<HTMLDivElement | null>(null);
-  const joyPointerIdRef = useRef<number | null>(null);
-  const lookPointerIdRef = useRef<number | null>(null);
-  const lookLastRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const showTouchControls = touchOverride ?? isTouchDevice;
-
-  useEffect(() => {
-    const onFirstTouch = () => setIsTouchDevice(true);
-    window.addEventListener('touchstart', onFirstTouch, { passive: true, once: true });
-    return () => {
-      window.removeEventListener('touchstart', onFirstTouch);
-      onTouchMove(0, 0);
-      onTouchSprint(false);
-    };
-  }, [onTouchMove, onTouchSprint]);
-
-  const updateJoystick = (clientX: number, clientY: number) => {
-    const el = joyZoneRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const maxRadius = rect.width * 0.36;
-    const rawDx = clientX - cx;
-    const rawDy = clientY - cy;
-    const dist = Math.hypot(rawDx, rawDy);
-    const clamped = Math.min(dist, maxRadius);
-    const angle = Math.atan2(rawDy, rawDx);
-    const kx = dist > 0.001 ? Math.cos(angle) * clamped : 0;
-    const ky = dist > 0.001 ? Math.sin(angle) * clamped : 0;
-    setStickOffset({ x: kx, y: ky });
-    const normX = maxRadius > 0 ? kx / maxRadius : 0;
-    const normY = maxRadius > 0 ? -ky / maxRadius : 0;
-    onTouchMove(Math.abs(normX) < 0.08 ? 0 : normX, Math.abs(normY) < 0.08 ? 0 : normY);
-  };
-
-  const resetJoystick = () => {
-    joyPointerIdRef.current = null;
-    setStickOffset({ x: 0, y: 0 });
-    onTouchMove(0, 0);
-  };
-
   const dangerRatio =
     hud.nearestMonsterDist < 18
       ? Math.max(0, Math.min(0.75, (1 - hud.nearestMonsterDist / 18) * 0.75))
@@ -166,39 +104,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Subtle Scanlines */}
       <div className="horror-scanlines absolute inset-0 opacity-20" />
 
-      {/* Mobile Touch-Look Surface (active across whole screen behind buttons/joystick) */}
-      {showTouchControls && (
-        <div
-          className="pointer-events-auto absolute inset-0 z-0 touch-none"
-          onPointerDown={(e) => {
-            if (lookPointerIdRef.current !== null) return;
-            lookPointerIdRef.current = e.pointerId;
-            lookLastRef.current = { x: e.clientX, y: e.clientY };
-            e.currentTarget.setPointerCapture(e.pointerId);
-          }}
-          onPointerMove={(e) => {
-            if (lookPointerIdRef.current !== e.pointerId) return;
-            const dx = e.clientX - lookLastRef.current.x;
-            const dy = e.clientY - lookLastRef.current.y;
-            lookLastRef.current = { x: e.clientX, y: e.clientY };
-            onAdjustLook(dx * 1.15, dy * 1.15);
-          }}
-          onPointerUp={(e) => {
-            if (lookPointerIdRef.current === e.pointerId) {
-              lookPointerIdRef.current = null;
-            }
-          }}
-          onPointerCancel={(e) => {
-            if (lookPointerIdRef.current === e.pointerId) {
-              lookPointerIdRef.current = null;
-            }
-          }}
-        />
-      )}
-
       {/* Top Left: Chapter, Job & Objective */}
       <div
-        className={`relative z-10 inline-block mt-3 ml-3 sm:mt-4 sm:ml-4 max-w-[calc(100vw-11rem)] sm:max-w-sm bg-[#08080c]/88 border rounded-md px-3 py-2 sm:px-4 sm:py-3 space-y-1.5 ${
+        className={`absolute top-4 left-4 max-w-sm bg-[#08080c]/88 border rounded-md px-4 py-3 space-y-1.5 ${
           hud.difficulty === 'nightmare' ? 'border-red-900/90' : 'border-zinc-800/90'
         }`}
       >
@@ -360,60 +268,6 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </p>
         )}
 
-        {/* Mobile Inline Vital Strip (frees bottom-left corner for virtual joystick) */}
-        {showTouchControls && (
-          <div className="pt-1.5 border-t border-zinc-800/80 grid grid-cols-2 gap-2 text-[11px]">
-            {isSwordChapter && (
-              <div className="col-span-2 space-y-0.5">
-                <div className="flex items-center justify-between text-red-300">
-                  <span>체력</span>
-                  <span className="font-mono-tabular">
-                    {hud.jobId === 'developer' || hud.jobId === 'hacker'
-                      ? '∞'
-                      : `${Math.round(hud.playerHp)}/${hud.playerMaxHp}`}
-                  </span>
-                </div>
-                <div className="h-1 bg-zinc-800 rounded-sm overflow-hidden">
-                  <div
-                    className={`h-full ${playerHpPct < 30 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                    style={{
-                      width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : playerHpPct}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-            <div className="space-y-0.5">
-              <div className="flex items-center justify-between text-amber-200">
-                <span>배터리</span>
-                <span className="font-mono-tabular">
-                  {hud.jobId === 'developer' || hud.jobId === 'hacker'
-                    ? '∞'
-                    : `${Math.round(hud.battery)}/${hud.maxBattery}`}
-                </span>
-              </div>
-              <div className="h-1 bg-zinc-800 rounded-sm overflow-hidden">
-                <div
-                  className={`h-full ${batteryPct < 22 ? 'bg-red-500' : 'bg-amber-400'}`}
-                  style={{
-                    width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : batteryPct}%`,
-                  }}
-                />
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              <div className="flex items-center justify-between text-zinc-200">
-                <span>스태미나</span>
-                <span className="font-mono-tabular">
-                  {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : Math.round(hud.stamina)}
-                </span>
-              </div>
-              <div className="h-1 bg-zinc-800 rounded-sm overflow-hidden">
-                <div className="h-full bg-zinc-200" style={{ width: `${staminaPct}%` }} />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Dedicated Chase Map / Final Escape Top-Center Urgent Banner */}
@@ -477,52 +331,32 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       )}
 
       {/* Top Right: Action Buttons */}
-      <div className="pointer-events-auto absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2">
-        <button
-          onClick={() => {
-            const next = !showTouchControls;
-            setTouchOverride(next);
-            if (!next) {
-              setTouchSprintActive(false);
-              onTouchSprint(false);
-              resetJoystick();
-            }
-          }}
-          title={showTouchControls ? '모바일 터치패드 끄기' : '모바일 터치패드 켜기'}
-          className={`flex items-center gap-1 px-2.5 h-8 sm:h-10 border rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-            showTouchControls
-              ? 'bg-amber-950/90 border-amber-600/80 text-amber-200'
-              : 'bg-[#08080c]/88 hover:bg-zinc-900 border-zinc-800/90 text-zinc-300 hover:text-white'
-          }`}
-        >
-          <Gamepad2 className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">터치패드</span>
-        </button>
+      <div className="pointer-events-auto absolute top-4 right-4 flex items-center gap-2">
         <button
           onClick={onToggleMute}
           title={muted ? '소리 켜기' : '음소거'}
-          className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-zinc-300 hover:text-white transition-colors cursor-pointer"
+          className="flex items-center justify-center w-10 h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-zinc-300 hover:text-white transition-colors cursor-pointer"
         >
           {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
         <button
           onClick={onOpenCodex}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 h-8 sm:h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-xs font-medium text-zinc-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-xs font-medium text-zinc-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">도감 [TAB]</span>
+          <span>도감 [TAB]</span>
         </button>
         <button
           onClick={onOpenPause}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 h-8 sm:h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-xs font-medium text-zinc-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          className="flex items-center gap-1.5 px-3 h-10 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-800/90 rounded-md text-xs font-medium text-zinc-200 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
           <Pause className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">일시정지</span>
+          <span>일시정지</span>
         </button>
       </div>
 
       {/* Center Reticle & Interact Prompt */}
-      <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div
           className={`w-1.5 h-1.5 rounded-full transition-transform duration-150 ${
             hud.nearestPrompt ? 'bg-amber-300 scale-150' : 'bg-white/60'
@@ -536,7 +370,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         )}
 
         {pickupToast && (
-          <div className="mt-4 px-4 py-2 bg-red-950/92 border border-red-700/70 rounded text-xs font-medium text-red-100 max-w-[85vw] text-center">
+          <div className="mt-4 px-4 py-2 bg-red-950/92 border border-red-700/70 rounded text-xs font-medium text-red-100">
             {pickupToast}
           </div>
         )}
@@ -544,398 +378,216 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
       {/* Roblox The Mimic-style Bottom-Center Story Subtitles */}
       {subtitle && (
-        <div
-          className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-10 w-[min(92vw,34rem)] px-4 py-2.5 sm:px-5 sm:py-3 bg-[#07070b]/92 border border-zinc-700/80 rounded-md shadow-xl text-center ${
-            showTouchControls ? 'bottom-36 sm:bottom-28' : 'bottom-24 sm:bottom-18'
-          }`}
-        >
+        <div className="pointer-events-none absolute bottom-24 sm:bottom-18 left-1/2 -translate-x-1/2 w-[min(92vw,34rem)] px-5 py-3 bg-[#07070b]/92 border border-zinc-700/80 rounded-md shadow-xl text-center">
           <p
             className="text-xs font-semibold tracking-wide mb-1"
             style={{ color: subtitle.accent || '#f87171' }}
           >
             [{subtitle.speaker}]
           </p>
-          <p className="text-xs sm:text-sm font-serif-kr text-zinc-100 leading-relaxed">{subtitle.text}</p>
+          <p className="text-sm font-serif-kr text-zinc-100 leading-relaxed">{subtitle.text}</p>
         </div>
       )}
 
-      {/* Discreet Mouse Look Hint when pointer not locked (PC only) */}
-      {!showTouchControls &&
-        !hud.pointerLocked &&
-        !hud.isBossFight &&
-        !hud.finalChaseActive &&
-        !hud.inChaseMap && (
-          <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2 z-10">
-            <button
-              onClick={onLockPointer}
-              className="px-3.5 py-1.5 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-300 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              {hud.jobId === 'student'
-                ? '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / R 회전'
-                : '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / Q·R 회전'}
-            </button>
+      {/* Discreet Mouse Look Hint when pointer not locked */}
+      {!hud.pointerLocked && !hud.isBossFight && !hud.finalChaseActive && !hud.inChaseMap && (
+        <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2">
+          <button
+            onClick={onLockPointer}
+            className="px-3.5 py-1.5 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-300 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            {hud.jobId === 'student'
+              ? '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / R 회전'
+              : '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / Q·R 회전'}
+          </button>
+        </div>
+      )}
+
+      {/* Bottom Left: HP (Ch.4 & Ch.8), Battery, Stamina & Active Job Skill */}
+      <div className="absolute bottom-4 left-4 w-72 bg-[#08080c]/88 border border-zinc-800/90 rounded-md p-3.5 space-y-2.5">
+        {isSwordChapter && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-red-300 flex items-center gap-1.5 font-medium">
+                <Heart className="w-3.5 h-3.5 text-red-500" />
+                <span>{chapter.id === 8 ? '이사무의 체력' : '야스의 체력'}</span>
+              </span>
+              <span className="font-mono-tabular text-zinc-200 font-semibold">
+                {hud.jobId === 'developer' || hud.jobId === 'hacker'
+                  ? '∞'
+                  : `${Math.round(hud.playerHp)} / ${hud.playerMaxHp}`}
+              </span>
+            </div>
+            <div className="h-2 bg-zinc-800 rounded-sm overflow-hidden">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  playerHpPct < 30 ? 'bg-red-500' : 'bg-emerald-500'
+                }`}
+                style={{
+                  width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : playerHpPct}%`,
+                }}
+              />
+            </div>
           </div>
         )}
 
-      {/* PC Bottom Left Vital Card vs Mobile Virtual Analog Joystick */}
-      {!showTouchControls ? (
-        <div className="absolute bottom-4 left-4 z-10 w-72 bg-[#08080c]/88 border border-zinc-800/90 rounded-md p-3.5 space-y-2.5">
-          {isSwordChapter && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-red-300 flex items-center gap-1.5 font-medium">
-                  <Heart className="w-3.5 h-3.5 text-red-500" />
-                  <span>{chapter.id === 8 ? '이사무의 체력' : '야스의 체력'}</span>
-                </span>
-                <span className="font-mono-tabular text-zinc-200 font-semibold">
-                  {hud.jobId === 'developer' || hud.jobId === 'hacker'
-                    ? '∞'
-                    : `${Math.round(hud.playerHp)} / ${hud.playerMaxHp}`}
-                </span>
-              </div>
-              <div className="h-2 bg-zinc-800 rounded-sm overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-150 ${
-                    playerHpPct < 30 ? 'bg-red-500' : 'bg-emerald-500'
-                  }`}
-                  style={{
-                    width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : playerHpPct}%`,
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-300 flex items-center gap-1.5">
-                <Flashlight className="w-3.5 h-3.5 text-amber-300" />
-                <span>손전등 [F] · {hud.flashlightOn ? '켜짐' : '꺼짐'}</span>
-              </span>
-              <span className="font-mono-tabular text-zinc-300">
-                {hud.jobId === 'developer' || hud.jobId === 'hacker'
-                  ? '∞'
-                  : `${Math.round(hud.battery)} / ${hud.maxBattery}`}
-              </span>
-            </div>
-            <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
-              <div
-                className={`h-full transition-all duration-150 ${
-                  batteryPct < 22 ? 'bg-red-500' : 'bg-amber-400'
-                }`}
-                style={{
-                  width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : batteryPct}%`,
-                }}
-              />
-            </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-300 flex items-center gap-1.5">
+              <Flashlight className="w-3.5 h-3.5 text-amber-300" />
+              <span>손전등 [F] · {hud.flashlightOn ? '켜짐' : '꺼짐'}</span>
+            </span>
+            <span className="font-mono-tabular text-zinc-300">
+              {hud.jobId === 'developer' || hud.jobId === 'hacker'
+                ? '∞'
+                : `${Math.round(hud.battery)} / ${hud.maxBattery}`}
+            </span>
           </div>
-
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-300">
-                스태미나 [Shift] · {hud.crouching ? '은신 자세' : '서 있음'}
-              </span>
-              <span className="font-mono-tabular text-zinc-300">
-                {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : Math.round(hud.stamina)}
-              </span>
-            </div>
-            <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
-              <div
-                className="h-full bg-zinc-200 transition-all duration-150"
-                style={{ width: `${staminaPct}%` }}
-              />
-            </div>
+          <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
+            <div
+              className={`h-full transition-all duration-150 ${
+                batteryPct < 22 ? 'bg-red-500' : 'bg-amber-400'
+              }`}
+              style={{
+                width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : batteryPct}%`,
+              }}
+            />
           </div>
+        </div>
 
-          <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-300 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-red-400" />
-                <span>{jobMeta.activeSkillName} [G]</span>
-              </span>
-              <span
-                className={`font-mono-tabular font-medium ${
-                  hud.skillActive
-                    ? 'text-amber-300'
-                    : skillReady
-                      ? 'text-emerald-400'
-                      : 'text-zinc-400'
-                }`}
-              >
-                {hud.skillActive
-                  ? '발동 중'
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-300">
+              스태미나 [Shift] · {hud.crouching ? '은신 자세' : '서 있음'}
+            </span>
+            <span className="font-mono-tabular text-zinc-300">
+              {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : Math.round(hud.stamina)}
+            </span>
+          </div>
+          <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
+            <div
+              className="h-full bg-zinc-200 transition-all duration-150"
+              style={{ width: `${staminaPct}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-red-400" />
+              <span>{jobMeta.activeSkillName} [G]</span>
+            </span>
+            <span
+              className={`font-mono-tabular font-medium ${
+                hud.skillActive
+                  ? 'text-amber-300'
                   : skillReady
-                    ? '사용 가능'
-                    : `${Math.ceil(hud.skillCooldown)}s`}
-              </span>
-            </div>
-
-            {hud.jobId === 'student' && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-blue-300 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>아이템 도약 [Q]</span>
-                </span>
-                <span
-                  className={`font-mono-tabular font-medium ${
-                    studentTeleportReady ? 'text-emerald-400' : 'text-zinc-400'
-                  }`}
-                >
-                  {studentTeleportReady
-                    ? '사용 가능'
-                    : `${Math.ceil(hud.studentTeleportCooldown)}s`}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div
-          ref={joyZoneRef}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            if (joyPointerIdRef.current !== null) return;
-            joyPointerIdRef.current = e.pointerId;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            updateJoystick(e.clientX, e.clientY);
-          }}
-          onPointerMove={(e) => {
-            if (joyPointerIdRef.current !== e.pointerId) return;
-            e.stopPropagation();
-            updateJoystick(e.clientX, e.clientY);
-          }}
-          onPointerUp={(e) => {
-            if (joyPointerIdRef.current === e.pointerId) {
-              e.stopPropagation();
-              resetJoystick();
-            }
-          }}
-          onPointerCancel={(e) => {
-            if (joyPointerIdRef.current === e.pointerId) {
-              e.stopPropagation();
-              resetJoystick();
-            }
-          }}
-          className="pointer-events-auto absolute bottom-5 left-4 z-20 w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#09090f]/70 border-2 border-zinc-600/75 shadow-2xl flex items-center justify-center touch-none select-none"
-          aria-label="이동 가상 조이스틱"
-        >
-          {/* Crosshair Axis Guides */}
-          <div className="pointer-events-none absolute inset-3 rounded-full border border-zinc-700/50" />
-          <span className="pointer-events-none absolute top-1.5 text-[9px] text-zinc-500 font-semibold">
-            앞
-          </span>
-          <span className="pointer-events-none absolute bottom-1.5 text-[9px] text-zinc-500 font-semibold">
-            뒤
-          </span>
-          <span className="pointer-events-none absolute left-2 text-[9px] text-zinc-500 font-semibold">
-            좌
-          </span>
-          <span className="pointer-events-none absolute right-2 text-[9px] text-zinc-500 font-semibold">
-            우
-          </span>
-          {/* Thumb Knob */}
-          <div
-            className="pointer-events-none w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-zinc-200/85 border-2 border-white/90 shadow-lg"
-            style={{
-              transform: `translate3d(${stickOffset.x}px, ${stickOffset.y}px, 0)`,
-            }}
-          />
-        </div>
-      )}
-
-      {/* Bottom Right: Compact PC Controls vs Ergonomic Mobile Action Cluster */}
-      {!showTouchControls ? (
-        <div className="pointer-events-auto absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
-            {isSwordChapter && (
-              <button
-                onClick={onSwordAttack}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded border bg-amber-900/90 hover:bg-amber-800 border-amber-500/80 text-amber-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <Swords className="w-3.5 h-3.5" />
-                <span>검 베기 [좌클릭 / Space]</span>
-              </button>
-            )}
-            {hud.jobId === 'student' && (
-              <button
-                onClick={onTriggerStudentTeleport}
-                disabled={!studentTeleportReady}
-                className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  studentTeleportReady
-                    ? 'bg-blue-950/90 hover:bg-blue-900 border-blue-500/80 text-blue-100'
-                    : 'bg-[#08080c]/88 border-zinc-800 text-zinc-500 cursor-not-allowed'
-                }`}
-              >
-                아이템 도약 [Q]
-              </button>
-            )}
-            <button
-              onClick={onTriggerSkill}
-              disabled={!skillReady}
-              className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                skillReady
-                  ? 'bg-red-950/90 hover:bg-red-900 border-red-600/80 text-red-100'
-                  : 'bg-[#08080c]/88 border-zinc-800 text-zinc-500 cursor-not-allowed'
-              }`}
-            >
-              {jobMeta.activeSkillName} [G]
-            </button>
-            <button
-              onClick={onToggleFlashlight}
-              className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                hud.flashlightOn
-                  ? 'bg-amber-950/88 border-amber-600/70 text-amber-200'
-                  : 'bg-[#08080c]/88 border-zinc-800 text-zinc-300 hover:text-white'
-              }`}
-            >
-              손전등 [F]
-            </button>
-            <button
-              onClick={onToggleCrouch}
-              className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                hud.crouching
-                  ? 'bg-red-950/88 border-red-700/70 text-red-200'
-                  : 'bg-[#08080c]/88 border-zinc-800 text-zinc-300 hover:text-white'
-              }`}
-            >
-              은신 [C]
-            </button>
-            {hud.nearestPrompt && (
-              <button
-                onClick={onInteract}
-                className="px-3.5 py-2 text-xs font-semibold rounded border bg-red-800 hover:bg-red-700 border-red-500 text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                상호작용 [E]
-              </button>
-            )}
-          </div>
-          <div className="hidden sm:block px-3 py-1.5 bg-[#08080c]/85 border border-zinc-800/80 rounded text-xs text-zinc-400">
-            {hud.isBossFight
-              ? '이동 WASD · 달리기 Shift · 검 베기 좌클릭/Space · 손전등 F · 스킬 G'
-              : hud.jobId === 'student'
-                ? '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 질주 G · 아이템 도약 Q'
-                : '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G'}
-          </div>
-        </div>
-      ) : (
-        <div
-          onPointerDown={(e) => e.stopPropagation()}
-          className="pointer-events-auto absolute bottom-4 right-3 sm:right-4 z-20 flex flex-col items-end gap-2 touch-none"
-        >
-          {/* Highlighted Interact / Sword Attack Primary Row */}
-          <div className="flex items-center gap-2">
-            {hud.nearestPrompt && (
-              <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onInteract();
-                }}
-                className="px-4 py-3 text-xs font-bold rounded-md border bg-red-800/95 active:bg-red-700 border-red-400 text-white shadow-lg animate-pulse whitespace-nowrap shrink-0"
-              >
-                조사 / 열기
-              </button>
-            )}
-            {isSwordChapter && (
-              <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onSwordAttack();
-                }}
-                className="flex items-center gap-1.5 px-4 py-3 text-xs font-bold rounded-md border bg-amber-800/95 active:bg-amber-700 border-amber-400 text-amber-50 shadow-lg whitespace-nowrap shrink-0"
-              >
-                <Swords className="w-4 h-4" />
-                <span>검 베기</span>
-              </button>
-            )}
-          </div>
-
-          {/* 2-row Mobile Action Grid */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                const next = !touchSprintActive;
-                setTouchSprintActive(next);
-                onTouchSprint(next);
-              }}
-              className={`px-3 py-2.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                touchSprintActive
-                  ? 'bg-emerald-900/90 border-emerald-500 text-emerald-100'
-                  : 'bg-[#08080c]/88 border-zinc-700 text-zinc-300'
-              }`}
-            >
-              달리기 {touchSprintActive ? 'ON' : 'OFF'}
-            </button>
-
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onToggleCrouch();
-              }}
-              className={`px-3 py-2.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                hud.crouching
-                  ? 'bg-red-950/90 border-red-600 text-red-200'
-                  : 'bg-[#08080c]/88 border-zinc-700 text-zinc-300'
-              }`}
-            >
-              은신 {hud.crouching ? 'ON' : 'OFF'}
-            </button>
-
-            <button
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onToggleFlashlight();
-              }}
-              className={`px-3 py-2.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                hud.flashlightOn
-                  ? 'bg-amber-950/90 border-amber-600 text-amber-200'
-                  : 'bg-[#08080c]/88 border-zinc-700 text-zinc-300'
-              }`}
-            >
-              손전등 {hud.flashlightOn ? 'ON' : 'OFF'}
-            </button>
-
-            <button
-              disabled={!skillReady}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onTriggerSkill();
-              }}
-              className={`px-3 py-2.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                skillReady
-                  ? 'bg-red-950/90 active:bg-red-800 border-red-500 text-red-100'
-                  : 'bg-[#08080c]/85 border-zinc-800 text-zinc-500'
+                    ? 'text-emerald-400'
+                    : 'text-zinc-400'
               }`}
             >
               {hud.skillActive
                 ? '발동 중'
                 : skillReady
-                  ? jobMeta.activeSkillName
+                  ? '사용 가능'
                   : `${Math.ceil(hud.skillCooldown)}s`}
-            </button>
+            </span>
+          </div>
 
-            {hud.jobId === 'student' && (
-              <button
-                disabled={!studentTeleportReady}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  onTriggerStudentTeleport();
-                }}
-                className={`col-span-2 px-3 py-2.5 text-xs font-semibold rounded-md border whitespace-nowrap ${
-                  studentTeleportReady
-                    ? 'bg-blue-950/90 active:bg-blue-800 border-blue-500 text-blue-100'
-                    : 'bg-[#08080c]/85 border-zinc-800 text-zinc-500'
+          {hud.jobId === 'student' && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-blue-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>아이템 도약 [Q]</span>
+              </span>
+              <span
+                className={`font-mono-tabular font-medium ${
+                  studentTeleportReady ? 'text-emerald-400' : 'text-zinc-400'
                 }`}
               >
                 {studentTeleportReady
-                  ? '✨ 아이템 도약'
-                  : `아이템 도약 (${Math.ceil(hud.studentTeleportCooldown)}s)`}
-              </button>
-            )}
-          </div>
-          <p className="text-[10px] text-zinc-400/90 pr-0.5">화면 빈 곳을 드래그해 시점 회전</p>
+                  ? '사용 가능'
+                  : `${Math.ceil(hud.studentTeleportCooldown)}s`}
+              </span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Bottom Right: Compact Controls & Quick Touch Buttons */}
+      <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col items-end gap-2">
+        <div className="flex items-center gap-2">
+          {isSwordChapter && (
+            <button
+              onClick={onSwordAttack}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded border bg-amber-900/90 hover:bg-amber-800 border-amber-500/80 text-amber-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Swords className="w-3.5 h-3.5" />
+              <span>검 베기 [좌클릭 / Space]</span>
+            </button>
+          )}
+          {hud.jobId === 'student' && (
+            <button
+              onClick={onTriggerStudentTeleport}
+              disabled={!studentTeleportReady}
+              className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                studentTeleportReady
+                  ? 'bg-blue-950/90 hover:bg-blue-900 border-blue-500/80 text-blue-100'
+                  : 'bg-[#08080c]/88 border-zinc-800 text-zinc-500 cursor-not-allowed'
+              }`}
+            >
+              아이템 도약 [Q]
+            </button>
+          )}
+          <button
+            onClick={onTriggerSkill}
+            disabled={!skillReady}
+            className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              skillReady
+                ? 'bg-red-950/90 hover:bg-red-900 border-red-600/80 text-red-100'
+                : 'bg-[#08080c]/88 border-zinc-800 text-zinc-500 cursor-not-allowed'
+            }`}
+          >
+            {jobMeta.activeSkillName} [G]
+          </button>
+          <button
+            onClick={onToggleFlashlight}
+            className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              hud.flashlightOn
+                ? 'bg-amber-950/88 border-amber-600/70 text-amber-200'
+                : 'bg-[#08080c]/88 border-zinc-800 text-zinc-300 hover:text-white'
+            }`}
+          >
+            손전등 [F]
+          </button>
+          <button
+            onClick={onToggleCrouch}
+            className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              hud.crouching
+                ? 'bg-red-950/88 border-red-700/70 text-red-200'
+                : 'bg-[#08080c]/88 border-zinc-800 text-zinc-300 hover:text-white'
+            }`}
+          >
+            은신 [C]
+          </button>
+          {hud.nearestPrompt && (
+            <button
+              onClick={onInteract}
+              className="px-3.5 py-2 text-xs font-semibold rounded border bg-red-800 hover:bg-red-700 border-red-500 text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              상호작용 [E]
+            </button>
+          )}
+        </div>
+        <div className="hidden sm:block px-3 py-1.5 bg-[#08080c]/85 border border-zinc-800/80 rounded text-xs text-zinc-400">
+          {hud.isBossFight
+            ? '이동 WASD · 달리기 Shift · 검 베기 좌클릭/Space · 손전등 F · 스킬 G'
+            : hud.jobId === 'student'
+              ? '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 질주 G · 아이템 도약 Q'
+              : '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G'}
+        </div>
+      </div>
     </div>
   );
 };
