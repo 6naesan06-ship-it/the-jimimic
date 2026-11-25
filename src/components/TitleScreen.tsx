@@ -173,7 +173,8 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               {bookChapters.map((ch) => {
                 const selected = ch.id === selectedChapter;
                 const cleared = clearedChapters.includes(ch.id);
-                const unlocked = isChapterUnlocked(ch.id, clearedChapters);
+                const isComingSoon = Boolean(ch.comingSoon);
+                const unlocked = !isComingSoon && isChapterUnlocked(ch.id, clearedChapters);
                 const prevOrder = getBookChapterOrder(ch.id - 1);
                 return (
                   <button
@@ -202,7 +203,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       >
                         {ch.code}
                       </span>
-                      {!unlocked ? (
+                      {isComingSoon ? (
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-400/80 shrink-0">
+                          <Lock className="w-3 h-3" />
+                          <span>출시 예정</span>
+                        </span>
+                      ) : !unlocked ? (
                         <Lock className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
                       ) : cleared ? (
                         <span className="text-emerald-400">클리어</span>
@@ -212,9 +218,11 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       {ch.title}
                     </div>
                     <div className="text-xs text-zinc-400 mt-1 line-clamp-1">
-                      {unlocked
-                        ? ch.location
-                        : `${activeBook === 2 ? 'Book II ' : ''}제${prevOrder}장 클리어 시 해금`}
+                      {isComingSoon
+                        ? '출시 예정 · 1장 완성 후 순차 공개'
+                        : unlocked
+                          ? ch.location
+                          : `${activeBook === 2 ? 'Book II ' : ''}제${prevOrder}장 클리어 시 해금`}
                     </div>
                   </button>
                 );
@@ -300,7 +308,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-zinc-400">직업 선택</p>
               <span className="text-xs text-zinc-500 font-mono-tabular">
-                Book {activeBook === 2 ? 'II' : 'I'} 클리어 {bookClearedCount}/4장 (총 {clearedChapters.length}/8장)
+                {activeBook === 2
+                  ? `Book II 클리어 ${bookClearedCount}/1장 (2~4장 출시 예정)`
+                  : `Book I 클리어 ${bookClearedCount}/4장 (총 ${clearedChapters.length}/5장)`}
               </span>
             </div>
 
@@ -364,7 +374,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Footer Controls Guide */}
       <footer className="flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-400 shrink-0">
-        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · 좌클릭/Space 검 베기(최종장) · 마우스 시점</div>
+        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · Q 아이템 도약(학생) · 좌클릭/Space 검 베기(최종장) · 마우스 시점</div>
         <div>헤드폰 착용을 권장합니다</div>
       </footer>
 

@@ -39,10 +39,10 @@ export const JOBS: JobMeta[] = [
     englishTitle: 'Student',
     unlockType: 'free',
     unlockLabel: '기본 해금',
-    summary: 'LA 퀸타 고교의 구조에 익숙하며 민첩한 발놀림으로 어둠을 빠져나가는 생존자입니다.',
-    passiveLabel: '최대 스태미나 130 · 스태미나 회복 +35%',
+    summary: 'LA 퀸타 고교의 구조에 익숙하며 빠른 발놀림과 공간 감각으로 아이템을 찾아 빠져나가는 생존자입니다.',
+    passiveLabel: '배터리 200 · 이동 속도 +15% · 스태미나 130(+35%) · [Q] 아이템 순간이동',
     activeSkillName: '질주 본능',
-    activeSkillDesc: '5초간 스태미나 소모 없이 이동 속도가 크게 상승합니다.',
+    activeSkillDesc: '[G] 5초간 무제한 질주 / [Q] 가장 가까운 아이템 앞으로 순간이동 (쿨타임 8초).',
     cooldownSec: 22,
     accentColor: '#3b82f6',
   },
@@ -53,9 +53,9 @@ export const JOBS: JobMeta[] = [
     unlockType: 'clear_1',
     unlockLabel: '제1장 클리어 시 해금',
     summary: '극한의 공포 속에서도 심박을 통제하고 응급 처치로 죽음의 문턱에서 살아남습니다.',
-    passiveLabel: '은신 소음 -25% · 챕터당 1회 치명타 자동 회피(응급 처치)',
+    passiveLabel: '배터리 200 · 은신 소음 -25% · 챕터당 1회 치명타 자동 회피(응급 처치)',
     activeSkillName: '아드레날린 주사',
-    activeSkillDesc: '즉시 스태미나를 100% 회복하고 손전등 배터리를 25% 충전합니다.',
+    activeSkillDesc: '즉시 스태미나를 100% 회복하고 손전등 배터리를 25%(+50) 충전합니다.',
     cooldownSec: 32,
     accentColor: '#10b981',
   },
@@ -66,7 +66,7 @@ export const JOBS: JobMeta[] = [
     unlockType: 'clear_2',
     unlockLabel: '제2장 클리어 시 해금',
     summary: '6명의 실종 사건을 수사하기 위해 투입된 현장 형사로 강력한 장비와 섬광탄을 지녔습니다.',
-    passiveLabel: '고성능 전술 손전등(배터리 소모 -30% · 광량 강화)',
+    passiveLabel: '배터리 200 · 고성능 전술 손전등(배터리 소모 -30% · 광량 강화)',
     activeSkillName: '전술 섬광탄',
     activeSkillDesc: '12.5m 이내의 괴물에게 강렬한 섬광을 터뜨려 3.5초간 경직시킵니다.',
     cooldownSec: 28,
@@ -79,7 +79,7 @@ export const JOBS: JobMeta[] = [
     unlockType: 'clear_all',
     unlockLabel: '제1~4장 모두 클리어 시 해금',
     summary: '마사시게 가문의 비술과 성스러운 부적으로 제어의 저주를 간파하고 악령의 움직임을 묶는 히든 직업입니다.',
-    passiveLabel: '가장 가까운 목표 방향 나침반 · 배터리 소모 -45%',
+    passiveLabel: '배터리 200 · 가장 가까운 목표 방향 나침반 · 배터리 소모 -45%',
     activeSkillName: '정화의 오후다',
     activeSkillDesc: '15m 이내의 모든 괴물을 5초간 제자리에 봉인해 움직임을 멈춥니다.',
     cooldownSec: 24,
@@ -122,6 +122,7 @@ export function getBookChapterOrder(chapterId: number): number {
 }
 
 export function isChapterUnlocked(chapterId: number, clearedChapters: number[]): boolean {
+  if (chapterId >= 6) return false;
   if (chapterId <= 1 || chapterId === 5) return true;
   return clearedChapters.includes(chapterId - 1);
 }
@@ -160,6 +161,7 @@ export interface ChapterSubtitles {
 export interface ChapterMeta {
   id: number;
   bookId?: BookId;
+  comingSoon?: boolean;
   code: string;
   title: string;
   subtitle: string;
@@ -690,6 +692,7 @@ export const CHAPTERS: ChapterMeta[] = [
   {
     id: 6,
     bookId: 2,
+    comingSoon: true,
     code: 'Book II · Chapter II',
     title: '제2장: 심해의 성역과 죽음',
     subtitle: '센자이의 배신 · 나기사의 추격과 엔즈카이의 부활',
@@ -782,6 +785,7 @@ export const CHAPTERS: ChapterMeta[] = [
   {
     id: 7,
     bookId: 2,
+    comingSoon: true,
     code: 'Book II · Chapter III',
     title: '제3장: 지옥(지고쿠)에서의 거래',
     subtitle: '영혼의 인도자들과 지고쿠의 시련 · 시니가미와 백염(White Flame)의 계약',
@@ -874,6 +878,7 @@ export const CHAPTERS: ChapterMeta[] = [
   {
     id: 8,
     bookId: 2,
+    comingSoon: true,
     code: 'Book II Finale · Chapter IV',
     title: '제4장: 파괴된 도쿄와 최종 결전',
     subtitle: '2022년 폐허가 된 도쿄 가와사키구 · 센자이 해방과 백염 결전',

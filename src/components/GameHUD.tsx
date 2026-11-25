@@ -26,6 +26,7 @@ interface GameHUDProps {
   onToggleFlashlight: () => void;
   onToggleCrouch: () => void;
   onTriggerSkill: () => void;
+  onTriggerStudentTeleport: () => void;
   onSwordAttack: () => void;
   onInteract: () => void;
   onLockPointer: () => void;
@@ -49,6 +50,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onToggleFlashlight,
   onToggleCrouch,
   onTriggerSkill,
+  onTriggerStudentTeleport,
   onSwordAttack,
   onInteract,
   onLockPointer,
@@ -64,9 +66,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
   const jobMeta = JOBS.find((j) => j.id === hud.jobId) || JOBS[0];
   const staminaPct = Math.max(0, Math.min(100, (hud.stamina / hud.maxStamina) * 100));
+  const batteryPct = Math.max(0, Math.min(100, (hud.battery / Math.max(1, hud.maxBattery)) * 100));
   const playerHpPct = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
   const bossHpPct = Math.max(0, Math.min(100, (hud.bossHp / hud.bossMaxHp) * 100));
   const skillReady = hud.skillCooldown <= 0.05;
+  const studentTeleportReady = hud.studentTeleportCooldown <= 0.05;
   const isSwordChapter = chapter.id === 4 || chapter.id === 8;
 
   const finalChasePulse = hud.finalChaseActive
@@ -391,7 +395,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             onClick={onLockPointer}
             className="px-3.5 py-1.5 bg-[#08080c]/88 hover:bg-zinc-900 border border-zinc-700/80 rounded text-xs text-zinc-300 hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / Q·R 회전
+            {hud.jobId === 'student'
+              ? '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / R 회전'
+              : '화면을 클릭하여 시점 고정 · 또는 마우스 드래그 / Q·R 회전'}
           </button>
         </div>
       )}
@@ -431,15 +437,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <span>손전등 [F] · {hud.flashlightOn ? '켜짐' : '꺼짐'}</span>
             </span>
             <span className="font-mono-tabular text-zinc-300">
-              {hud.jobId === 'developer' || hud.jobId === 'hacker' ? '∞' : `${Math.round(hud.battery)}%`}
+              {hud.jobId === 'developer' || hud.jobId === 'hacker'
+                ? '∞'
+                : `${Math.round(hud.battery)} / ${hud.maxBattery}`}
             </span>
           </div>
           <div className="h-1.5 bg-zinc-800 rounded-sm overflow-hidden">
             <div
               className={`h-full transition-all duration-150 ${
-                hud.battery < 22 ? 'bg-red-500' : 'bg-amber-400'
+                batteryPct < 22 ? 'bg-red-500' : 'bg-amber-400'
               }`}
-              style={{ width: `${Math.max(0, Math.min(100, hud.battery))}%` }}
+              style={{
+                width: `${hud.jobId === 'developer' || hud.jobId === 'hacker' ? 100 : batteryPct}%`,
+              }}
             />
           </div>
         </div>
@@ -461,26 +471,46 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
         </div>
 
-        <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-          <span className="text-zinc-300 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-red-400" />
-            <span>{jobMeta.activeSkillName} [G]</span>
-          </span>
-          <span
-            className={`font-mono-tabular font-medium ${
-              hud.skillActive
-                ? 'text-amber-300'
+        <div className="pt-2 border-t border-zinc-800/80 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-red-400" />
+              <span>{jobMeta.activeSkillName} [G]</span>
+            </span>
+            <span
+              className={`font-mono-tabular font-medium ${
+                hud.skillActive
+                  ? 'text-amber-300'
+                  : skillReady
+                    ? 'text-emerald-400'
+                    : 'text-zinc-400'
+              }`}
+            >
+              {hud.skillActive
+                ? '발동 중'
                 : skillReady
-                  ? 'text-emerald-400'
-                  : 'text-zinc-400'
-            }`}
-          >
-            {hud.skillActive
-              ? '발동 중'
-              : skillReady
-                ? '사용 가능'
-                : `${Math.ceil(hud.skillCooldown)}s`}
-          </span>
+                  ? '사용 가능'
+                  : `${Math.ceil(hud.skillCooldown)}s`}
+            </span>
+          </div>
+
+          {hud.jobId === 'student' && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-blue-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>아이템 도약 [Q]</span>
+              </span>
+              <span
+                className={`font-mono-tabular font-medium ${
+                  studentTeleportReady ? 'text-emerald-400' : 'text-zinc-400'
+                }`}
+              >
+                {studentTeleportReady
+                  ? '사용 가능'
+                  : `${Math.ceil(hud.studentTeleportCooldown)}s`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -494,6 +524,19 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             >
               <Swords className="w-3.5 h-3.5" />
               <span>검 베기 [좌클릭 / Space]</span>
+            </button>
+          )}
+          {hud.jobId === 'student' && (
+            <button
+              onClick={onTriggerStudentTeleport}
+              disabled={!studentTeleportReady}
+              className={`px-3 py-2 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                studentTeleportReady
+                  ? 'bg-blue-950/90 hover:bg-blue-900 border-blue-500/80 text-blue-100'
+                  : 'bg-[#08080c]/88 border-zinc-800 text-zinc-500 cursor-not-allowed'
+              }`}
+            >
+              아이템 도약 [Q]
             </button>
           )}
           <button
@@ -539,7 +582,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div className="hidden sm:block px-3 py-1.5 bg-[#08080c]/85 border border-zinc-800/80 rounded text-xs text-zinc-400">
           {hud.isBossFight
             ? '이동 WASD · 달리기 Shift · 검 베기 좌클릭/Space · 손전등 F · 스킬 G'
-            : '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G'}
+            : hud.jobId === 'student'
+              ? '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 질주 G · 아이템 도약 Q'
+              : '이동 WASD · 달리기 Shift · 손전등 F · 은신 C · 조사 E · 직업 스킬 G'}
         </div>
       </div>
     </div>

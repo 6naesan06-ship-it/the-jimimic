@@ -58,6 +58,7 @@ export interface HudSnapshot {
   stamina: number;
   maxStamina: number;
   battery: number;
+  maxBattery: number;
   flashlightOn: boolean;
   crouching: boolean;
   collectedItems: number;
@@ -73,6 +74,8 @@ export interface HudSnapshot {
   skillCooldown: number;
   maxSkillCooldown: number;
   skillActive: boolean;
+  studentTeleportCooldown: number;
+  maxStudentTeleportCooldown: number;
   doctorReviveReady: boolean;
   nearestObjectiveDist: number | null;
   nearestObjectiveAngleDeg: number | null;
@@ -181,7 +184,8 @@ export class MimicEngine {
   private eyeHeight = 1.65;
   private stamina = 100;
   private maxStamina = 100;
-  private battery = 100;
+  private battery = 200;
+  private maxBattery = 200;
   private flashlightOn = true;
   private crouching = false;
   private exhausted = false;
@@ -190,6 +194,8 @@ export class MimicEngine {
   private skillCooldown = 0;
   private maxSkillCooldown = 22;
   private skillActiveTimer = 0;
+  private studentTeleportCooldown = 0;
+  private readonly maxStudentTeleportCooldown = 8;
   private doctorReviveReady = false;
   private invulnTimer = 0;
   private hasTriggeredFirstChase = false;
@@ -459,6 +465,10 @@ export class MimicEngine {
       }
     } else if (code === 'KeyG') {
       this.triggerJobSkill();
+    } else if (code === 'KeyQ') {
+      if (this.jobId === 'student') {
+        this.triggerStudentTeleportSkill();
+      }
     }
   };
 
@@ -634,12 +644,13 @@ export class MimicEngine {
     } else if (this.jobId === 'doctor') {
       this.stamina = this.maxStamina;
       this.exhausted = false;
-      this.battery = Math.min(100, this.battery + 25);
+      const charge = Math.round(this.maxBattery * 0.25);
+      this.battery = Math.min(this.maxBattery, this.battery + charge);
       if (this.isBossChapter() && !this.inChaseMap) {
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 35);
-        this.callbacks.onSystemNotice('아드레날린 주사! HP +35, 스태미나 100%, 배터리 +25% 회복');
+        this.callbacks.onSystemNotice(`아드레날린 주사! HP +35, 스태미나 100%, 배터리 +${charge} 회복`);
       } else {
-        this.callbacks.onSystemNotice('아드레날린 주사! 스태미나 100% 및 배터리 +25% 회복');
+        this.callbacks.onSystemNotice(`아드레날린 주사! 스태미나 100% 및 배터리 +${charge} 회복`);
       }
     } else if (this.jobId === 'exorcist') {
       let sealed = 0;
@@ -670,7 +681,7 @@ export class MimicEngine {
       }
       this.skillActiveTimer = 8.0;
       this.stamina = this.maxStamina;
-      this.battery = 100;
+      this.battery = this.maxBattery;
       this.playerHp = this.playerMaxHp;
 
       if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked) {
@@ -722,7 +733,7 @@ export class MimicEngine {
       }
       this.skillActiveTimer = 10.0;
       this.stamina = this.maxStamina;
-      this.battery = 100;
+      this.battery = this.maxBattery;
       this.playerHp = this.playerMaxHp;
 
       if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked) {
@@ -771,6 +782,92 @@ export class MimicEngine {
       }
       this.callbacks.onSystemNotice('시스템 백도어! 전 괴물을 15초간 강제 마비시켰습니다.');
     }
+  }
+
+  public triggerStudentTeleportSkill() {
+    if (this.mode !== 'playing' || this.jobId !== 'student' || !this.mapData) return;
+    if (this.studentTeleportCooldown > 0) return;
+
+    let targetItem: CollectibleEntity | null = null;
+    let bestDist = Infinity;
+
+    // Prioritize uncollected objective items first (keys/ofuda/butterflies/seals/rats)
+    for (const item of this.collectibles) {
+      if (item.collected) continue;
+      if (item.kind === 'battery' || item.kind === 'diary') continue;
+      const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+      if (d < bestDist) {
+        bestDist = d;
+        targetItem = item;
+      }
+    }
+
+    // Fallback to nearest battery or diary if no objective collectibles remain
+    if (!targetItem) {
+      for (const item of this.collectibles) {
+        if (item.collected) continue;
+        const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+        if (d < bestDist) {
+          bestDist = d;
+          targetItem = item;
+        }
+      }
+    }
+
+    if (!targetItem) {
+      this.callbacks.onSystemNotice('맵에 순간이동할 수 있는 아이템이 남아있지 않습니다.');
+      return;
+    }
+
+    this.studentTeleportCooldown = this.maxStudentTeleportCooldown;
+    soundEngine.playPortalUnlock();
+
+    const dirX = this.playerX - targetItem.x;
+    const dirZ = this.playerZ - targetItem.z;
+    const dirLen = Math.hypot(dirX, dirZ) || 1;
+    const offsets: Array<[number, number]> = [
+      [(dirX / dirLen) * 1.35, (dirZ / dirLen) * 1.35],
+      [0, 1.35],
+      [0, -1.35],
+      [1.35, 0],
+      [-1.35, 0],
+      [1.0, 1.0],
+      [-1.0, 1.0],
+      [1.0, -1.0],
+      [-1.0, -1.0],
+    ];
+
+    let safeX = targetItem.x;
+    let safeZ = targetItem.z;
+    for (const [ox, oz] of offsets) {
+      const cx = targetItem.x + ox;
+      const cz = targetItem.z + oz;
+      if (this.canOccupy(cx, cz) && hasLineOfSight(cx, cz, targetItem.x, targetItem.z, this.mapData)) {
+        safeX = cx;
+        safeZ = cz;
+        break;
+      }
+    }
+
+    this.playerX = safeX;
+    this.playerZ = safeZ;
+    const lookDx = targetItem.x - safeX;
+    const lookDz = targetItem.z - safeZ;
+    if (Math.hypot(lookDx, lookDz) > 0.15) {
+      this.yaw = Math.atan2(-lookDx, -lookDz);
+      this.pitch = -0.14;
+    }
+    this.invulnTimer = Math.max(this.invulnTimer, 0.9);
+
+    const itemLabel =
+      targetItem.kind === 'battery'
+        ? '예비 배터리'
+        : targetItem.kind === 'diary'
+          ? '숨겨진 일기'
+          : targetItem.kind === 'rat'
+            ? '시궁쥐'
+            : '봉인 아이템';
+    this.callbacks.onSystemNotice(`✨ 아이템 도약 [Q]! 가장 가까운 ${itemLabel} 앞으로 순간이동했습니다!`);
   }
 
   private warpPlayerNearExit() {
@@ -977,7 +1074,8 @@ export class MimicEngine {
 
     this.maxStamina = jobId === 'student' ? 130 : 100;
     this.stamina = this.maxStamina;
-    this.battery = 100;
+    this.maxBattery = 200;
+    this.battery = this.maxBattery;
     this.flashlightOn = true;
     this.crouching = false;
     this.exhausted = false;
@@ -985,6 +1083,7 @@ export class MimicEngine {
     this.skillCooldown = 0;
     this.maxSkillCooldown = jobMeta.cooldownSec;
     this.skillActiveTimer = 0;
+    this.studentTeleportCooldown = 0;
     this.doctorReviveReady = jobId === 'doctor';
     this.invulnTimer = 0;
     this.hasTriggeredFirstChase = false;
@@ -2051,7 +2150,7 @@ export class MimicEngine {
 
     this.stamina = this.maxStamina;
     this.exhausted = false;
-    this.battery = Math.max(this.battery, 70);
+    this.battery = Math.max(this.battery, Math.round(this.maxBattery * 0.7));
     this.playerHp = Math.max(this.playerHp, 65);
     this.invulnTimer = 1.2;
 
@@ -2121,7 +2220,7 @@ export class MimicEngine {
     if (item.light) item.light.intensity = 0;
 
     if (item.kind === 'battery') {
-      this.battery = Math.min(100, this.battery + (this.difficulty === 'nightmare' ? 35 : 45));
+      this.battery = Math.min(this.maxBattery, this.battery + (this.difficulty === 'nightmare' ? 55 : 75));
       soundEngine.playPickup('battery');
     } else if (item.kind === 'diary') {
       soundEngine.playPickup('diary');
@@ -2340,13 +2439,16 @@ export class MimicEngine {
     this.elapsedSeconds += dt;
     if (this.skillCooldown > 0) this.skillCooldown = Math.max(0, this.skillCooldown - dt);
     if (this.skillActiveTimer > 0) this.skillActiveTimer = Math.max(0, this.skillActiveTimer - dt);
+    if (this.studentTeleportCooldown > 0) {
+      this.studentTeleportCooldown = Math.max(0, this.studentTeleportCooldown - dt);
+    }
     if (this.invulnTimer > 0) this.invulnTimer = Math.max(0, this.invulnTimer - dt);
     if (this.swordCooldown > 0) this.swordCooldown = Math.max(0, this.swordCooldown - dt);
     if (this.hurtFlash > 0) this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.2);
     if (this.cameraShakeTimer > 0) this.cameraShakeTimer = Math.max(0, this.cameraShakeTimer - dt);
 
-    // Optional keyboard look (Q / R)
-    if (this.keys.has('KeyQ')) this.yaw += 1.9 * dt;
+    // Optional keyboard look (Q / R; Q is reserved for Student's item teleport skill)
+    if (this.keys.has('KeyQ') && this.jobId !== 'student') this.yaw += 1.9 * dt;
     if (this.keys.has('KeyR')) this.yaw -= 1.9 * dt;
 
     // Movement Input
@@ -2396,8 +2498,12 @@ export class MimicEngine {
         ? this.skillActiveTimer > 0
           ? 2.05
           : 1.65
-        : studentBoost
-          ? 1.28
+        : this.jobId === 'student'
+          ? studentBoost
+            ? 1.47
+            : this.invulnTimer > 0
+              ? 1.35
+              : 1.15
           : this.invulnTimer > 0
             ? 1.25
             : 1.0;
@@ -2770,7 +2876,7 @@ export class MimicEngine {
     // Flashlight flicker when low battery or monster nearby (more intense in Nightmare; Developer/Hacker never flicker)
     if (this.flashlightOn) {
       let flicker = 1;
-      const lowBatThresh = isNightmare ? 35 : 18;
+      const lowBatThresh = isNightmare ? 45 : 22;
       const proxThresh = isNightmare ? 11.5 : 8.5;
       if (!isGodJob && (this.battery < lowBatThresh || minMonsterDist < proxThresh)) {
         flicker = Math.sin(elapsed * 37) > (isNightmare ? -0.35 : -0.6) ? 1 : 0.32;
@@ -3650,6 +3756,7 @@ export class MimicEngine {
       stamina: this.stamina,
       maxStamina: this.maxStamina,
       battery: this.battery,
+      maxBattery: this.maxBattery,
       flashlightOn: this.flashlightOn,
       crouching: this.crouching,
       collectedItems: this.chapterId === 5 ? this.ratsFedCount : this.collectedItems,
@@ -3665,6 +3772,8 @@ export class MimicEngine {
       skillCooldown: this.skillCooldown,
       maxSkillCooldown: this.maxSkillCooldown,
       skillActive: this.skillActiveTimer > 0,
+      studentTeleportCooldown: this.studentTeleportCooldown,
+      maxStudentTeleportCooldown: this.maxStudentTeleportCooldown,
       doctorReviveReady: this.doctorReviveReady,
       nearestObjectiveDist,
       nearestObjectiveAngleDeg,

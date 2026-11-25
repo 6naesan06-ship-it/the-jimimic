@@ -41,7 +41,8 @@ const STORAGE_DEV_KEY = 'mimic_dev_unlocked';
 const INITIAL_HUD: HudSnapshot = {
   stamina: 100,
   maxStamina: 100,
-  battery: 100,
+  battery: 200,
+  maxBattery: 200,
   flashlightOn: true,
   crouching: false,
   collectedItems: 0,
@@ -57,6 +58,8 @@ const INITIAL_HUD: HudSnapshot = {
   skillCooldown: 0,
   maxSkillCooldown: 22,
   skillActive: false,
+  studentTeleportCooldown: 0,
+  maxStudentTeleportCooldown: 8,
   doctorReviveReady: false,
   nearestObjectiveDist: null,
   nearestObjectiveAngleDeg: null,
@@ -183,7 +186,7 @@ export default function App() {
               );
             } else if (chId === 5) {
               setClearRewardText(
-                'Book II 제2장 「심해의 성역과 죽음」이 해금되었습니다!'
+                'Book II 제1장 「아오가시마 섬의 추격」을 클리어했습니다! 제2~4장은 현재 출시 예정이며 1장 완성 후 순차 공개됩니다.'
               );
             } else if (chId === 6) {
               setClearRewardText(
@@ -504,6 +507,7 @@ export default function App() {
           onToggleFlashlight={() => engineRef.current?.toggleFlashlight()}
           onToggleCrouch={() => engineRef.current?.toggleCrouch()}
           onTriggerSkill={() => engineRef.current?.triggerJobSkill()}
+          onTriggerStudentTeleport={() => engineRef.current?.triggerStudentTeleportSkill()}
           onSwordAttack={() => engineRef.current?.triggerSwordAttack()}
           onInteract={() => engineRef.current?.triggerInteract()}
           onLockPointer={() => engineRef.current?.requestPointerLock()}
@@ -771,26 +775,34 @@ export default function App() {
                   >
                     Book II: 질투의 서 제1장 시작하기
                   </button>
-                ) : selectedChapter < CHAPTERS.length ? (
-                  <button
-                    onClick={() => {
-                      const nextId = selectedChapter + 1;
-                      setSelectedChapter(nextId);
-                      setIntroSceneIdx(0);
-                      setScreen('intro');
-                    }}
-                    className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
-                  >
-                    제{getBookChapterOrder(selectedChapter + 1)}장으로 계속하기
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setCodexOpen(true)}
-                    className="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-700 rounded transition-colors cursor-pointer"
-                  >
-                    전체 도감 및 기록 확인하기
-                  </button>
-                )}
+                ) : (() => {
+                  const nextChapter = CHAPTERS.find((c) => c.id === selectedChapter + 1);
+                  if (nextChapter && !nextChapter.comingSoon) {
+                    return (
+                      <button
+                        onClick={() => {
+                          const nextId = selectedChapter + 1;
+                          setSelectedChapter(nextId);
+                          setIntroSceneIdx(0);
+                          setScreen('intro');
+                        }}
+                        className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
+                      >
+                        제{getBookChapterOrder(selectedChapter + 1)}장으로 계속하기
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      onClick={() => setCodexOpen(true)}
+                      className="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-700 rounded transition-colors cursor-pointer"
+                    >
+                      {nextChapter?.comingSoon
+                        ? '제2~4장 출시 예정 · 도감 보기'
+                        : '전체 도감 및 기록 확인하기'}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
