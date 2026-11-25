@@ -13,6 +13,7 @@ import {
   JobId,
   MONSTERS,
   MonsterId,
+  getBookChapterOrder,
   isChapterUnlocked,
   isJobUnlocked,
 } from './data/lore';
@@ -68,6 +69,11 @@ const INITIAL_HUD: HudSnapshot = {
   bossStunTimer: 0,
   bossAttackWarning: null,
   bossHitsLanded: 0,
+  finalChaseActive: false,
+  finalChaseElapsed: 0,
+  inChaseMap: false,
+  carriedRat: 'none',
+  difficulty: 'normal',
 };
 
 export default function App() {
@@ -93,6 +99,7 @@ export default function App() {
   const [subtitle, setSubtitle] = useState<CutsceneLine | null>(null);
   const [introSceneIdx, setIntroSceneIdx] = useState<number>(0);
   const [clearSceneIdx, setClearSceneIdx] = useState<number>(0);
+  const [endingBranch, setEndingBranch] = useState<'good' | 'bad'>('good');
   const [kintoruControlActive, setKintoruControlActive] = useState<boolean>(false);
   const toastTimerRef = useRef<number | null>(null);
   const subtitleTimerRef = useRef<number | null>(null);
@@ -150,6 +157,7 @@ export default function App() {
         soundEngine.stopBgm();
         setClearTimeSec(elapsed);
         setClearSceneIdx(0);
+        setEndingBranch('good');
         setSubtitle(null);
         setClearedChapters((prev) => {
           const isFirstClear = !prev.includes(chId);
@@ -167,11 +175,27 @@ export default function App() {
               );
             } else if (chId === 3) {
               setClearRewardText(
-                '최종장 제4장 「최후의 결전과 엔딩」이 해금되었습니다!'
+                'Book I 최종장 제4장 「최후의 결전과 엔딩」이 해금되었습니다!'
               );
             } else if (chId === 4 && allCleared) {
               setClearRewardText(
-                '제1~4장을 모두 클리어하고 사이고모를 쓰러뜨려 히든 직업 ‘퇴마사(Exorcist)’가 해금되었습니다!'
+                'Book I 제1~4장을 모두 클리어하고 사이고모를 쓰러뜨려 히든 직업 ‘퇴마사(Exorcist)’가 해금되었습니다! Book II 「질투의 서」에도 도전해 보세요.'
+              );
+            } else if (chId === 5) {
+              setClearRewardText(
+                'Book II 제2장 「심해의 성역과 죽음」이 해금되었습니다!'
+              );
+            } else if (chId === 6) {
+              setClearRewardText(
+                'Book II 제3장 「지옥(지고쿠)에서의 거래」가 해금되었습니다!'
+              );
+            } else if (chId === 7) {
+              setClearRewardText(
+                'Book II 최종장 제4장 「파괴된 도쿄와 최종 결전」이 해금되었습니다!'
+              );
+            } else if (chId === 8) {
+              setClearRewardText(
+                'Book II 「질투의 서」의 모든 장을 완주하고 ‘질투의 짐승’ 엔즈카이를 처단했습니다! 아래에서 굿 엔딩(정사)과 배드 엔딩(네타모)을 모두 확인해 보세요.'
               );
             } else {
               setClearRewardText(null);
@@ -185,11 +209,21 @@ export default function App() {
         setScreen('clear');
       },
       onItemCollected: (count, total, kind) => {
+        if (kind === 'rat_feed') {
+          if (count >= total) {
+            showToast(
+              '미오와 린에게 독 쥐 3회 먹이기 완료! 선착장 출구로 들어가 추격전을 돌파하세요!'
+            );
+          } else {
+            showToast(`미오와 린에게 독 쥐를 먹였습니다 (${count} / ${total})`);
+          }
+          return;
+        }
         if (count >= total) {
           showToast(
             kind === 'key'
-              ? '열쇠 4개를 모두 모았습니다! 지하실 문 출구로 향하십시오.'
-              : '모든 봉인 아이템을 모았습니다! 붉은 도리이 출구로 향하십시오.'
+              ? '열쇠 4개를 모두 모았습니다! 출구로 들어가 추격전을 돌파하십시오.'
+              : '모든 봉인 아이템을 모았습니다! 붉은 도리이 출구로 들어가 추격전을 돌파하십시오.'
           );
         } else {
           showToast(`봉인 아이템 회수 (${count} / ${total})`);
@@ -280,6 +314,7 @@ export default function App() {
     soundEngine.init();
     setSelectedChapter(chapterId);
     setClearRewardText(null);
+    setEndingBranch('good');
     setSubtitle(null);
     setKintoruControlActive(false);
     engineRef.current?.startChapter(chapterId, difficulty, jobToUse);
@@ -389,11 +424,20 @@ export default function App() {
             })()}
 
             <div className="p-3.5 bg-[#0e0d13] border border-zinc-800/80 rounded text-xs text-zinc-400 space-y-1">
-              <p className="text-zinc-200 font-medium">
-                {currentChapter.id === 4
-                  ? '결전 목표 · 축복받은 검으로 사이고모와 직접 대결 (약 20회 타격 · 3초 스턴 활용)'
-                  : '생존 목표 · 괴물 추격 범위 12m (12m 이상 벗어나면 추격 중단)'}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-zinc-200 font-medium">
+                  {currentChapter.id === 4
+                    ? `결전 목표 · 축복받은 검으로 사이고모와 대결 (스턴 ${difficulty === 'nightmare' ? '2.4초' : '3초'} · 패배 후 추격전 맵)`
+                    : currentChapter.id === 8
+                      ? `결전 목표 · 백염으로 센자이를 해방하고 엔즈카이 소멸 (스턴 ${difficulty === 'nightmare' ? '2.4초' : '3초'} · 추격전 맵)`
+                      : `생존 목표 · 괴물 추격 범위 ${difficulty === 'nightmare' ? '15.5m' : '12m'} · 출구 진입 시 추격전 맵 전환`}
+                </p>
+                {difficulty === 'nightmare' && (
+                  <span className="shrink-0 px-2 py-0.5 text-[10px] font-bold bg-red-950/90 border border-red-600/80 text-red-200 rounded">
+                    ☠ 악몽 모드
+                  </span>
+                )}
+              </div>
               <p>{currentChapter.objectiveLabel}</p>
               <p className="text-amber-300/90 pt-1">
                 {currentJobMeta.name} 스킬 [G] ({currentJobMeta.activeSkillName}):{' '}
@@ -471,6 +515,7 @@ export default function App() {
         <KintoruControlOverlay
           paused={screen !== 'playing' || codexOpen}
           chapterId={selectedChapter}
+          nightmare={difficulty === 'nightmare'}
           onComplete={(survived) => {
             engineRef.current?.resolveKintoruControl(survived);
           }}
@@ -588,7 +633,7 @@ export default function App() {
                   onClick={() => handleBeginChapter(selectedChapter)}
                   className="px-5 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
                 >
-                  제{selectedChapter}장 다시 도전
+                  제{getBookChapterOrder(selectedChapter)}장 다시 도전
                 </button>
                 <button
                   onClick={handleReturnToTitle}
@@ -603,102 +648,154 @@ export default function App() {
       )}
 
       {/* Chapter Clear / Story Ending Cutscene Screen */}
-      {screen === 'clear' && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 p-6">
-          <div className="max-w-2xl w-full bg-[#0b0b0f] border border-zinc-800 rounded-lg p-7 space-y-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs text-emerald-400 font-medium tracking-wider">
-                  CHAPTER {selectedChapter} CLEARED · 소요 시간{' '}
-                  <span className="font-mono-tabular">
-                    {Math.floor(clearTimeSec / 60)}분 {Math.floor(clearTimeSec % 60)}초
-                  </span>
-                </p>
-                <h2 className="text-2xl font-serif-kr font-black text-zinc-100">
-                  {currentChapter.clearTitle}
-                </h2>
-              </div>
-              <span className="font-mono-tabular text-xs text-zinc-400 shrink-0">
-                {Math.min(clearSceneIdx + 1, currentChapter.clearScenes.length)} /{' '}
-                {currentChapter.clearScenes.length}
-              </span>
-            </div>
+      {screen === 'clear' && (() => {
+        const hasBadEnding =
+          selectedChapter === 8 && Boolean(currentChapter.badClearScenes?.length);
+        const activeClearTitle =
+          hasBadEnding && endingBranch === 'bad' && currentChapter.badClearTitle
+            ? currentChapter.badClearTitle
+            : currentChapter.clearTitle;
+        const activeClearScenes =
+          hasBadEnding && endingBranch === 'bad' && currentChapter.badClearScenes
+            ? currentChapter.badClearScenes
+            : currentChapter.clearScenes;
+        const scene =
+          activeClearScenes[clearSceneIdx] ||
+          activeClearScenes[activeClearScenes.length - 1];
 
-            {(() => {
-              const scene =
-                currentChapter.clearScenes[clearSceneIdx] ||
-                currentChapter.clearScenes[currentChapter.clearScenes.length - 1];
-              return (
-                <div className="p-5 bg-[#121017] border border-zinc-800/90 rounded-md space-y-2.5 min-h-32 flex flex-col justify-center">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className="font-semibold"
-                      style={{ color: scene.accent || '#34d399' }}
-                    >
-                      {scene.speaker}
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 p-6">
+            <div className="max-w-2xl w-full bg-[#0b0b0f] border border-zinc-800 rounded-lg p-7 space-y-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-emerald-400 font-medium tracking-wider">
+                    BOOK {selectedChapter >= 5 ? 'II' : 'I'} · CHAPTER {getBookChapterOrder(selectedChapter)} CLEARED
+                    {difficulty === 'nightmare' ? ' · ☠ 악몽 모드' : ''} · 소요 시간{' '}
+                    <span className="font-mono-tabular">
+                      {Math.floor(clearTimeSec / 60)}분 {Math.floor(clearTimeSec % 60)}초
                     </span>
-                    {scene.speakerRole && (
-                      <>
-                        <span aria-hidden="true" className="text-zinc-600">
-                          ·
-                        </span>
-                        <span className="text-zinc-400">{scene.speakerRole}</span>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-base font-serif-kr text-zinc-100 leading-relaxed">
-                    {scene.text}
                   </p>
+                  <h2 className="text-2xl font-serif-kr font-black text-zinc-100">
+                    {activeClearTitle}
+                  </h2>
                 </div>
-              );
-            })()}
-
-            {clearRewardText && clearSceneIdx >= currentChapter.clearScenes.length - 1 && (
-              <div className="p-4 bg-amber-950/50 border border-amber-700/70 rounded-md space-y-1">
-                <p className="text-xs font-semibold text-amber-300">새로운 해금 보상</p>
-                <p className="text-xs text-amber-100 leading-relaxed">{clearRewardText}</p>
+                <span className="font-mono-tabular text-xs text-zinc-400 shrink-0">
+                  {Math.min(clearSceneIdx + 1, activeClearScenes.length)} /{' '}
+                  {activeClearScenes.length}
+                </span>
               </div>
-            )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800">
-              <button
-                onClick={handleReturnToTitle}
-                className="px-4 py-2.5 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition-colors cursor-pointer"
-              >
-                타이틀로 돌아가기
-              </button>
-
-              {clearSceneIdx < currentChapter.clearScenes.length - 1 ? (
-                <button
-                  onClick={() => setClearSceneIdx((i) => i + 1)}
-                  className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
-                >
-                  다음 장면 보기
-                </button>
-              ) : selectedChapter < CHAPTERS.length ? (
-                <button
-                  onClick={() => {
-                    const nextId = selectedChapter + 1;
-                    setSelectedChapter(nextId);
-                    setIntroSceneIdx(0);
-                    setScreen('intro');
-                  }}
-                  className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
-                >
-                  제{selectedChapter + 1}장으로 계속하기
-                </button>
-              ) : (
-                <button
-                  onClick={() => setCodexOpen(true)}
-                  className="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-700 rounded transition-colors cursor-pointer"
-                >
-                  전체 도감 및 기록 확인하기
-                </button>
+              {hasBadEnding && (
+                <div className="flex items-center gap-2 p-1.5 bg-zinc-950 border border-zinc-800 rounded-md">
+                  <button
+                    onClick={() => {
+                      setEndingBranch('good');
+                      setClearSceneIdx(0);
+                    }}
+                    className={`flex-1 py-2 px-3 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                      endingBranch === 'good'
+                        ? 'bg-emerald-900/80 text-emerald-100 border border-emerald-600/70'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    굿 엔딩 (정사 루트 · 센자이 구원과 희생)
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEndingBranch('bad');
+                      setClearSceneIdx(0);
+                    }}
+                    className={`flex-1 py-2 px-3 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                      endingBranch === 'bad'
+                        ? 'bg-purple-950/90 text-purple-100 border border-purple-600/70'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    배드 엔딩 (저주 굴복 · 엔즈카이 &amp; 네타모)
+                  </button>
+                </div>
               )}
+
+              <div className="p-5 bg-[#121017] border border-zinc-800/90 rounded-md space-y-2.5 min-h-32 flex flex-col justify-center">
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className="font-semibold"
+                    style={{ color: scene.accent || '#34d399' }}
+                  >
+                    {scene.speaker}
+                  </span>
+                  {scene.speakerRole && (
+                    <>
+                      <span aria-hidden="true" className="text-zinc-600">
+                        ·
+                      </span>
+                      <span className="text-zinc-400">{scene.speakerRole}</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-base font-serif-kr text-zinc-100 leading-relaxed">
+                  {scene.text}
+                </p>
+              </div>
+
+              {clearRewardText && clearSceneIdx >= activeClearScenes.length - 1 && (
+                <div className="p-4 bg-amber-950/50 border border-amber-700/70 rounded-md space-y-1">
+                  <p className="text-xs font-semibold text-amber-300">새로운 해금 보상</p>
+                  <p className="text-xs text-amber-100 leading-relaxed">{clearRewardText}</p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800">
+                <button
+                  onClick={handleReturnToTitle}
+                  className="px-4 py-2.5 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition-colors cursor-pointer"
+                >
+                  타이틀로 돌아가기
+                </button>
+
+                {clearSceneIdx < activeClearScenes.length - 1 ? (
+                  <button
+                    onClick={() => setClearSceneIdx((i) => i + 1)}
+                    className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
+                  >
+                    다음 장면 보기
+                  </button>
+                ) : selectedChapter === 4 ? (
+                  <button
+                    onClick={() => {
+                      setSelectedChapter(5);
+                      setIntroSceneIdx(0);
+                      setScreen('intro');
+                    }}
+                    className="px-6 py-2.5 text-sm font-semibold text-white bg-amber-700 hover:bg-amber-600 rounded transition-colors cursor-pointer"
+                  >
+                    Book II: 질투의 서 제1장 시작하기
+                  </button>
+                ) : selectedChapter < CHAPTERS.length ? (
+                  <button
+                    onClick={() => {
+                      const nextId = selectedChapter + 1;
+                      setSelectedChapter(nextId);
+                      setIntroSceneIdx(0);
+                      setScreen('intro');
+                    }}
+                    className="px-6 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors cursor-pointer"
+                  >
+                    제{getBookChapterOrder(selectedChapter + 1)}장으로 계속하기
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setCodexOpen(true)}
+                    className="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-800 hover:bg-emerald-700 rounded transition-colors cursor-pointer"
+                  >
+                    전체 도감 및 기록 확인하기
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Lore & Monster Codex Modal */}
       {codexOpen && (

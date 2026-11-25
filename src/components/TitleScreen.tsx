@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import { BookOpen, KeyRound, Lock, Play, Skull, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
-import { CHAPTERS, DifficultyMode, JOBS, JobId, MONSTERS, isChapterUnlocked, isJobUnlocked } from '../data/lore';
+import {
+  BookId,
+  CHAPTERS,
+  DifficultyMode,
+  JOBS,
+  JobId,
+  MONSTERS,
+  getBookChapterOrder,
+  getBookIdForChapter,
+  isChapterUnlocked,
+  isJobUnlocked,
+} from '../data/lore';
 
 interface TitleScreenProps {
   selectedChapter: number;
@@ -40,8 +51,16 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState(false);
 
+  const activeBook: BookId = getBookIdForChapter(selectedChapter);
+  const bookChapters = CHAPTERS.filter((c) => (c.bookId ?? 1) === activeBook);
+  const bookClearedCount = bookChapters.filter((c) => clearedChapters.includes(c.id)).length;
   const activeChapter = CHAPTERS.find((c) => c.id === selectedChapter) || CHAPTERS[0];
   const activeJob = JOBS.find((j) => j.id === selectedJob) || JOBS[0];
+
+  const handleSelectBook = (book: BookId) => {
+    if (book === activeBook) return;
+    onSelectChapter(book === 2 ? 5 : 1);
+  };
 
   const handleJobClick = (jobId: JobId) => {
     if (jobId === 'developer' && !devUnlocked) {
@@ -102,27 +121,60 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Main Content */}
       <div className="max-w-5xl w-full space-y-5 my-auto py-4">
-        <div className="space-y-2 max-w-2xl">
-          <p className="text-xs font-medium tracking-widest text-red-400">
-            ROBLOX THE MIMIC · BOOK I: CONTROL
-          </p>
-          <h1 className="text-3xl md:text-5xl font-serif-kr font-black text-zinc-100 tracking-tight leading-tight text-balance">
-            더 미믹: 지배의 서
-          </h1>
-          <p className="text-xs md:text-sm text-zinc-300 leading-relaxed">
-            2021년 8월 7일, 실종된 6명의 친구들과 킨토루에게 납치된 어머니 케이코를 구하기 위해 마사시게 가문의 저주 속 이세계로 뛰어드는 생존 공포 게임.
-          </p>
+        <div className="space-y-3 max-w-2xl">
+          {/* Book I / Book II Switcher */}
+          <div className="inline-flex items-center gap-1 p-1 bg-[#0b0a0e]/90 border border-zinc-800 rounded-md">
+            <button
+              onClick={() => handleSelectBook(1)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                activeBook === 1
+                  ? 'bg-red-800 text-white shadow'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Book I · 지배의 서
+            </button>
+            <button
+              onClick={() => handleSelectBook(2)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                activeBook === 2
+                  ? 'bg-amber-700 text-white shadow'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              Book II · 질투의 서
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className={`text-xs font-medium tracking-widest ${activeBook === 2 ? 'text-amber-400' : 'text-red-400'}`}>
+              {activeBook === 2
+                ? 'ROBLOX THE MIMIC · BOOK II: JEALOUSY'
+                : 'ROBLOX THE MIMIC · BOOK I: CONTROL'}
+            </p>
+            <h1 className="text-3xl md:text-5xl font-serif-kr font-black text-zinc-100 tracking-tight leading-tight text-balance">
+              {activeBook === 2 ? '더 미믹: 질투의 서' : '더 미믹: 지배의 서'}
+            </h1>
+            <p className="text-xs md:text-sm text-zinc-300 leading-relaxed">
+              {activeBook === 2
+                ? '형 센자이의 실종을 쫓아 아오가시마 심해와 키이로이바라 교단에 뛰어든 형사 우치우미 이사무. 질투의 짐승 엔즈카이와 맞서는 두 번째 이야기.'
+                : '2021년 8월 7일, 실종된 6명의 친구들과 킨토루에게 납치된 어머니 케이코를 구하기 위해 마사시게 가문의 저주 속 이세계로 뛰어드는 생존 공포 게임.'}
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Left 7 cols: Chapter Selection & Start Box */}
           <div className="lg:col-span-7 space-y-3">
-            <p className="text-xs font-medium text-zinc-400">챕터 선택</p>
+            <p className="text-xs font-medium text-zinc-400">
+              {activeBook === 2 ? 'Book II 챕터 선택' : 'Book I 챕터 선택'}
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {CHAPTERS.map((ch) => {
+              {bookChapters.map((ch) => {
                 const selected = ch.id === selectedChapter;
                 const cleared = clearedChapters.includes(ch.id);
                 const unlocked = isChapterUnlocked(ch.id, clearedChapters);
+                const prevOrder = getBookChapterOrder(ch.id - 1);
                 return (
                   <button
                     key={ch.id}
@@ -132,12 +184,22 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       !unlocked
                         ? 'bg-[#08070b]/75 border-zinc-800/50 text-zinc-500 cursor-not-allowed'
                         : selected
-                          ? 'bg-red-950/65 border-red-700/80 text-zinc-100 cursor-pointer'
+                          ? activeBook === 2
+                            ? 'bg-amber-950/60 border-amber-600/80 text-zinc-100 cursor-pointer'
+                            : 'bg-red-950/65 border-red-700/80 text-zinc-100 cursor-pointer'
                           : 'bg-[#0b0a0e]/88 border-zinc-800/90 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 cursor-pointer'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className={unlocked ? 'text-red-400 font-medium' : 'text-zinc-500 font-medium'}>
+                      <span
+                        className={
+                          unlocked
+                            ? activeBook === 2
+                              ? 'text-amber-400 font-medium'
+                              : 'text-red-400 font-medium'
+                            : 'text-zinc-500 font-medium'
+                        }
+                      >
                         {ch.code}
                       </span>
                       {!unlocked ? (
@@ -150,7 +212,9 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                       {ch.title}
                     </div>
                     <div className="text-xs text-zinc-400 mt-1 line-clamp-1">
-                      {unlocked ? ch.location : `제${ch.id - 1}장 클리어 시 해금`}
+                      {unlocked
+                        ? ch.location
+                        : `${activeBook === 2 ? 'Book II ' : ''}제${prevOrder}장 클리어 시 해금`}
                     </div>
                   </button>
                 );
@@ -199,6 +263,12 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 </div>
               </div>
 
+              {difficulty === 'nightmare' && (
+                <div className="px-3 py-2 bg-red-950/65 border border-red-700/75 rounded text-xs text-red-200 leading-relaxed">
+                  <span className="font-bold text-red-300">☠ 악몽 모드 적용:</span> 추가 괴물 배회 · 15.5m 광범위 감지 · 피빛 안개 &amp; 손전등 2.2배 소모 · 고속 미로 변동 · 7개 손아귀 환각 · 보스 HP 1400(스턴 2.4초) &amp; 고속 추격전
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-zinc-400">
                   선택된 직업: <span className="text-zinc-100 font-semibold">{activeJob.name}</span>
@@ -218,7 +288,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                     className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-red-800 hover:bg-red-700 rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Play className="w-4 h-4 fill-current" />
-                    <span>제{selectedChapter}장 시작하기</span>
+                    <span>제{getBookChapterOrder(selectedChapter)}장 시작하기</span>
                   </button>
                 </div>
               </div>
@@ -230,7 +300,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-zinc-400">직업 선택</p>
               <span className="text-xs text-zinc-500 font-mono-tabular">
-                클리어 {clearedChapters.length}/4장
+                Book {activeBook === 2 ? 'II' : 'I'} 클리어 {bookClearedCount}/4장 (총 {clearedChapters.length}/8장)
               </span>
             </div>
 
@@ -294,7 +364,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
 
       {/* Footer Controls Guide */}
       <footer className="flex flex-wrap items-center justify-between gap-4 text-xs text-zinc-400 shrink-0">
-        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · 좌클릭/Space 검 베기(4장) · 마우스 시점</div>
+        <div>조작: WASD 이동 · Shift 달리기 · F 손전등 · C 은신 · E 조사 · G 직업 스킬 · 좌클릭/Space 검 베기(최종장) · 마우스 시점</div>
         <div>헤드폰 착용을 권장합니다</div>
       </footer>
 

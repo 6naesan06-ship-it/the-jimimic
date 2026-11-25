@@ -152,6 +152,251 @@ export const MonsterPortrait: React.FC<MonsterPortraitProps> = ({ monsterId, cla
     );
   }
 
+  if (monsterId === 'kyogi') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#1f1808] via-[#0c0a06] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="쿄기 초상">
+          <defs>
+            <radialGradient id="kyogiGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#eab308" stopOpacity="0.38" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#kyogiGlow)" />
+          <path d="M40 220 L58 128 L122 128 L140 220 Z" fill="#18181b" />
+          <rect x="66" y="156" width="48" height="10" fill="#eab308" />
+          <path d="M48 80 L90 22 L132 80 L122 132 L58 132 Z" fill="#09090b" />
+          <rect x="64" y="54" width="52" height="66" rx="8" fill="#18181b" stroke="#ca8a04" strokeWidth="2.5" />
+          <circle cx="90" cy="64" r="6" fill="#eab308" />
+          <ellipse cx="76" cy="84" rx="8" ry="4" fill="#facc15" />
+          <ellipse cx="104" cy="84" rx="8" ry="4" fill="#facc15" />
+          <path d="M70 105 Q90 118 110 105" fill="none" stroke="#eab308" strokeWidth="2.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'nagisa') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#062229] via-[#041117] to-[#020608] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="나기사 초상">
+          <defs>
+            <radialGradient id="nagisaGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#020608" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#nagisaGlow)" />
+          <path d="M44 220 Q60 140 90 132 Q120 140 136 220 Z" fill="#0f3d4a" />
+          <polygon points="54,78 24,52 50,98" fill="#2dd4bf" />
+          <polygon points="126,78 156,52 130,98" fill="#2dd4bf" />
+          <ellipse cx="90" cy="88" rx="32" ry="40" fill="#0c2f3a" stroke="#14b8a6" strokeWidth="2" />
+          <ellipse cx="77" cy="82" rx="8" ry="5" fill="#2dd4bf" />
+          <ellipse cx="103" cy="82" rx="8" ry="5" fill="#2dd4bf" />
+          <path d="M68 106 Q90 124 112 106" fill="#041418" stroke="#99f6e4" strokeWidth="2" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'kuishinbo') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#291018] via-[#12070a] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="쿠이신보 초상">
+          <defs>
+            <radialGradient id="kuiGlow" cx="50%" cy="45%" r="55%">
+              <stop offset="0%" stopColor="#fb7185" stopOpacity="0.38" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#kuiGlow)" />
+          <ellipse cx="90" cy="172" rx="54" ry="58" fill="#3b2327" />
+          <ellipse cx="90" cy="94" rx="40" ry="44" fill="#4c3336" />
+          <circle cx="72" cy="74" r="6" fill="#09090b" />
+          <circle cx="108" cy="74" r="6" fill="#09090b" />
+          <circle cx="72" cy="74" r="2" fill="#fb7185" />
+          <circle cx="108" cy="74" r="2" fill="#fb7185" />
+          <ellipse cx="90" cy="108" rx="28" ry="22" fill="#180407" />
+          <path d="M68 96 L74 110 L80 96 L86 110 L92 96 L98 110 L104 96 L112 110" fill="none" stroke="#e7e5e4" strokeWidth="2.5" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'rin_mio') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#260b1c] via-[#0e060b] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="린과 미오 초상">
+          <defs>
+            <radialGradient id="rinGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#f472b6" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#rinGlow)" />
+          <path d="M42 200 Q46 54 90 38 Q134 54 138 200 Z" fill="#09090b" />
+          <path d="M46 220 L66 135 L114 135 L134 220 Z" fill="#881337" />
+          <ellipse cx="122" cy="76" rx="18" ry="22" fill="#d4d4d8" opacity="0.85" />
+          <circle cx="122" cy="72" r="3" fill="#f472b6" />
+          <ellipse cx="86" cy="88" rx="30" ry="38" fill="#e4e4e7" />
+          <circle cx="74" cy="82" r="6" fill="#09090b" />
+          <circle cx="98" cy="82" r="6" fill="#09090b" />
+          <path d="M74 88 L74 110 M98 88 L98 110" stroke="#9f1239" strokeWidth="2.5" />
+          <ellipse cx="86" cy="108" rx="10" ry="7" fill="#4c0519" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'enzukai') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#291f07] via-[#120d04] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="엔즈카이 초상">
+          <defs>
+            <radialGradient id="enzukaiGlow" cx="50%" cy="40%" r="58%">
+              <stop offset="0%" stopColor="#eab308" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#enzukaiGlow)" />
+          <g stroke="#eab308" strokeWidth="5" strokeLinecap="round" fill="none">
+            <path d="M62 120 L22 72 L16 144" />
+            <path d="M118 120 L158 72 L164 144" />
+          </g>
+          <path d="M40 220 L58 134 L122 134 L140 220 Z" fill="#7f1d1d" />
+          <rect x="62" y="166" width="56" height="12" fill="#facc15" opacity="0.9" />
+          <polygon points="62,54 50,18 74,44" fill="#facc15" />
+          <polygon points="118,54 130,18 106,44" fill="#facc15" />
+          <ellipse cx="90" cy="88" rx="32" ry="40" fill="#ca8a04" stroke="#451a03" strokeWidth="2" />
+          <ellipse cx="77" cy="84" rx="8" ry="6" fill="#180505" />
+          <ellipse cx="103" cy="84" rx="8" ry="6" fill="#180505" />
+          <circle cx="77" cy="84" r="2.2" fill="#fef08a" />
+          <circle cx="103" cy="84" r="2.2" fill="#fef08a" />
+          <path d="M68 108 Q90 124 112 108 Q90 100 68 108 Z" fill="#2a0408" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'nure') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#072629] via-[#041214] to-[#020506] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="누레 초상">
+          <defs>
+            <radialGradient id="nureGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#020506" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#nureGlow)" />
+          <path d="M36 220 Q56 150 90 142 Q124 150 144 220 Z" fill="#0f3b3e" />
+          <path d="M40 198 Q46 54 90 36 Q134 54 140 198 Z" fill="#09090b" />
+          <ellipse cx="90" cy="88" rx="30" ry="38" fill="#133d42" stroke="#2dd4bf" strokeWidth="1.5" />
+          <ellipse cx="77" cy="82" rx="8" ry="5" fill="#a7f3d0" />
+          <ellipse cx="103" cy="82" rx="8" ry="5" fill="#a7f3d0" />
+          <rect x="76" y="77" width="2" height="10" fill="#042f2e" />
+          <rect x="102" y="77" width="2" height="10" fill="#042f2e" />
+          <path d="M72 108 Q90 124 108 108" fill="#061215" />
+          <polygon points="78,107 82,120 86,107" fill="#ecfeff" />
+          <polygon points="94,107 98,120 102,107" fill="#ecfeff" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'hyakume') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#2b170b] via-[#120a06] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="햐쿠메 초상">
+          <defs>
+            <radialGradient id="hyakumeGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#f97316" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#hyakumeGlow)" />
+          <path d="M28 220 L52 132 L128 132 L152 220 Z" fill="#3b2c2e" />
+          <circle cx="58" cy="158" r="7" fill="#fef3c7" />
+          <circle cx="58" cy="158" r="3" fill="#b91c1c" />
+          <circle cx="122" cy="158" r="7" fill="#fef3c7" />
+          <circle cx="122" cy="158" r="3" fill="#b91c1c" />
+          <ellipse cx="90" cy="88" rx="38" ry="44" fill="#3b2c2e" />
+          <ellipse cx="90" cy="78" rx="22" ry="15" fill="#fef3c7" />
+          <circle cx="90" cy="78" r="9.5" fill="#b91c1c" />
+          <circle cx="90" cy="78" r="4.5" fill="#09090b" />
+          <ellipse cx="90" cy="112" rx="22" ry="9" fill="#120508" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'jigoku_warden') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#221233] via-[#0e0717] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="지고쿠의 영혼 인도자 초상">
+          <defs>
+            <radialGradient id="wardenGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#c084fc" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#wardenGlow)" />
+          <path d="M36 220 L56 128 L124 128 L144 220 Z" fill="#1e1628" />
+          <path d="M46 88 L90 22 L134 88 L124 134 L56 134 Z" fill="#140e1d" />
+          <ellipse cx="90" cy="88" rx="28" ry="36" fill="#c4b5fd" />
+          <ellipse cx="77" cy="82" rx="7.5" ry="10" fill="#09090b" />
+          <ellipse cx="103" cy="82" rx="7.5" ry="10" fill="#09090b" />
+          <circle cx="77" cy="82" r="2.5" fill="#e879f9" />
+          <circle cx="103" cy="82" r="2.5" fill="#e879f9" />
+          <line x1="72" y1="108" x2="108" y2="108" stroke="#18181b" strokeWidth="3" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (monsterId === 'senzai_fallen') {
+    return (
+      <div
+        className={`relative overflow-hidden bg-gradient-to-b from-[#262010] via-[#120e07] to-[#050507] flex items-center justify-center ${className}`}
+      >
+        <svg viewBox="0 0 180 220" className="w-full h-full" aria-label="타락한 센자이 초상">
+          <defs>
+            <radialGradient id="senzaiGlow" cx="50%" cy="42%" r="55%">
+              <stop offset="0%" stopColor="#facc15" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="#050507" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="180" height="220" fill="url(#senzaiGlow)" />
+          <path d="M42 220 L60 132 L120 132 L138 220 Z" fill="#1e1a18" />
+          <rect x="64" y="150" width="52" height="10" fill="#eab308" />
+          <ellipse cx="90" cy="86" rx="31" ry="39" fill="#cbc6be" />
+          <path d="M68 54 L84 74" stroke="#7f1d1d" strokeWidth="3.5" strokeLinecap="round" />
+          <ellipse cx="77" cy="82" rx="7" ry="5" fill="#181208" />
+          <ellipse cx="103" cy="82" rx="7" ry="5" fill="#181208" />
+          <circle cx="77" cy="82" r="2.5" fill="#facc15" />
+          <circle cx="103" cy="82" r="2.5" fill="#facc15" />
+          <path d="M74 108 Q90 100 106 108" fill="none" stroke="#451a03" strokeWidth="3" />
+        </svg>
+      </div>
+    );
+  }
+
   // Saigomo (Spider Demon Final Form of Kintoru)
   return (
     <div

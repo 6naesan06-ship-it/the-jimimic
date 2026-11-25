@@ -9,7 +9,12 @@ export interface ChapterMapData {
   cells: string[][];
   playerStart: { gx: number; gz: number };
   exitTile: { gx: number; gz: number };
-  items: Array<{ gx: number; gz: number; kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary' }>;
+  items: Array<{
+    gx: number;
+    gz: number;
+    kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary';
+  }>;
+  poisonWell?: { gx: number; gz: number };
   lanterns: Array<{ gx: number; gz: number }>;
   monsterSpawns: Array<{ gx: number; gz: number }>;
   desks: Array<{ gx: number; gz: number }>;
@@ -133,9 +138,249 @@ const RAW_MAPS: Record<number, string[]> = {
     '###.......X.........###',
     '#######################',
   ],
+
+  // --- BOOK II: JEALOUSY ---
+  // Chapter 5: Aogashima Island & Coastal Harbor Pier (Poisoned Well + Rats -> Rin & Mio, Nure, Hyakume)
+  5: [
+    '#######################',
+    '#S....#...L...#..K...D#',
+    '#.F.#.#.#####.#.###.###',
+    '#...#.#..B..#...#...K.#',
+    '###.#.###.#.###.#.###.#',
+    '#...L.....#..F..L.....#',
+    '#.###.#####.###.#####.#',
+    '#.#...#...~...#.......#',
+    '#.#.D.#.~~U~~.#.F...B.#',
+    '#.#...L.~~~~~.#.......#',
+    '#.###.#.~~P~~.#####.###',
+    '#..K..#...~...#...L...#',
+    '#.#####.#####.#.#####.#',
+    '#...P...#.....#.......#',
+    '#.#####.#.###.#######.#',
+    '#.#...#.#..J..#..~....#',
+    '#.#.B.#.#.....#.~~~~.P#',
+    '#.#...L.T..K..T.~~~~..#',
+    '#.###.###.###.#.~~J~~.#',
+    '#.....#.......#.......#',
+    '#.F...L...T...#..KL...#',
+    '#.........#..........X#',
+    '#######################',
+  ],
+
+  // Chapter 6: Submerged Deep-Sea Sanctum (Nagisa & Kyogi)
+  6: [
+    '#######################',
+    '#D..K.#...S...#..K...B#',
+    '#.....L.......L.......#',
+    '#.###.###...###.###.###',
+    '#.#...~~~...~~~...#...#',
+    '#.#.J.~~~...~~~.J.#.L.#',
+    '#.#...#...~...#...#...#',
+    '#.###.#.#####.#.###.###',
+    '#..B..#.#...#.#...#...#',
+    '#.#####.#.P.#.#.#####.#',
+    '#.~...L.......L...~..K#',
+    '#.~~~.###.J.###.~~~...#',
+    '#.~...#.......#...~...#',
+    '#.#####..~~~..#####.###',
+    '#...K...~~~~~....P....#',
+    '###.###.~~~~~.###.###.#',
+    '#...#...~~D~~...#...#.#',
+    '#.L.#.J.......J.#.B.#.#',
+    '#...###..~~~..###...#.#',
+    '#.......~~~~~.......#.#',
+    '#.###.L..~~~..L.###...#',
+    '#..K......X...........#',
+    '#######################',
+  ],
+
+  // Chapter 7: Jigoku / Hell & Blood River Crossings (Jigoku Warden & Kuishinbo)
+  7: [
+    '#######################',
+    '#D..L.....#....K.....X#',
+    '#.#######.#.#########.#',
+    '#.#..G..#.#.#...J...#.#',
+    '#.#.....#...#.......#.#',
+    '#.#..K..#####.###.###.#',
+    '#...L.........#...B...#',
+    '###.#####.###.#.#####.#',
+    '#...#...#..P..#.....#.#',
+    '#.B.#.J.#.....#####.#.#',
+    '#...#...#..D..#..G..#.#',
+    '#~~~~~~~.~~~.~~~~~~~~~#',
+    '#~~~~~~~.~~~.~~~~~~~~~#',
+    '#.#..G..#.....#...K.#.#',
+    '#.#.....#.###.#.....#.#',
+    '#.#####.#..P..#.###.#.#',
+    '#.....#.#.....#.#J..#.#',
+    '#.###.#.#######.#.###.#',
+    '#..K..L.......#.......#',
+    '#.###########.#.#####.#',
+    '#.......#...B.#...G...#',
+    '#S..L...#....K........#',
+    '#######################',
+  ],
+
+  // Chapter 8: Ruined 2022 Tokyo · Kawasaki District Arena — White Flame Duel vs. Enzukai & Fallen Senzai
+  8: [
+    '#######################',
+    '#E.........~.........E#',
+    '#..##.............##..#',
+    '#..##...J.....J...##..#',
+    '#.......F.....F.......#',
+    '#...~.............~...#',
+    '#.........P...........#',
+    '#.....##.......##.....#',
+    '#..F..##.......##..F..#',
+    '#.....................#',
+    '#..J...............J..#',
+    '#.........~~~....P....#',
+    '#.........~~~.........#',
+    '#..##.............##..#',
+    '#..##.............##..#',
+    '#.......F.....F.......#',
+    '#...~.............~...#',
+    '#.....##.......##.....#',
+    '#.....##.......##.....#',
+    '#...J......S......J...#',
+    '#..E...............E..#',
+    '#..........X..........#',
+    '#######################',
+  ],
 };
 
-const SOLID_CHARS = new Set(['#', 'F', 'O', 'G', 'J']);
+const RAW_CHASE_MAPS: Record<number, string[]> = {
+  // Ch.1 Chase Map: Burning/Flooded LA Quinta School -> Arari Escape Tunnel
+  1: [
+    '#############################',
+    '#P......#.....E.....#.......#',
+    '#..###..#..F.....F..#..O.O..#',
+    '#..#....L...........L.......#',
+    '#..#..###..###.###..###.###.#',
+    '#...........#...#...........#',
+    '#..S.....L..#...#..L.......X#',
+    '#...........#...#...........#',
+    '#..#..###..###.###..###.###.#',
+    '#..#....L...........L.......#',
+    '#..###..#..O.....F..#..E....#',
+    '#P......#...........#.......#',
+    '#############################',
+  ],
+  // Ch.2 Chase Map: Shattered Imperial Palace & Haunted Hospital Hallway
+  2: [
+    '#############################',
+    '#P....#.......J.......#.....#',
+    '#..#..#..W.........W..#..F..#',
+    '#..#..L.....#####.....L.....#',
+    '#..#........#...#........##.#',
+    '#.....###.......###.........#',
+    '#..S..L....W.....W....L....X#',
+    '#.....###.......###.........#',
+    '#..#........#...#........##.#',
+    '#..#..L.....#####.....L.....#',
+    '#..#..#..F.........J..#..W..#',
+    '#P....#...............#.....#',
+    '#############################',
+  ],
+  // Ch.3 Chase Map: Oomukade's Crimson Cherry Blossom Swamp Gauntlet
+  3: [
+    '#############################',
+    '#P...~~..G..~~~~~..G..~~....#',
+    '#.##.~~.....~~~~~.....~~.##.#',
+    '#.#..L....T.......T....L..#.#',
+    '#.#..###..###...###..###..#.#',
+    '#....~~~......G......~~~....#',
+    '#..S.~~~..T.......T..~~~...X#',
+    '#....~~~......G......~~~....#',
+    '#.#..###..###...###..###..#.#',
+    '#.#..L....J.......J....L..#.#',
+    '#.##.~~.....~~~~~.....~~.##.#',
+    '#P...~~..G..~~~~~..G..~~....#',
+    '#############################',
+  ],
+  // Ch.4 Chase Map: Collapsing Underground Cavern Escape Tunnel
+  4: [
+    '#############################',
+    '#P....~~~....#....~~~.......#',
+    '#..#..~~~.W..#..W.~~~..#..#.#',
+    '#..#.........L.........#..#.#',
+    '#..###..##..###..##..###....#',
+    '#.......##.......##.........#',
+    '#..S..L.....~~~.....L......X#',
+    '#.......##.......##.........#',
+    '#..###..##..###..##..###....#',
+    '#..#.........L.........#..#.#',
+    '#..#..~~~.J..#..J.~~~..#..#.#',
+    '#P....~~~....#....~~~.......#',
+    '#############################',
+  ],
+  // Ch.5 Chase Map (Book II Ch.1): Aogashima Pier & Cliffside Escape — Pursued by Mio & Rin!
+  5: [
+    '#############################',
+    '#P....~~~~....T....~~~~.....#',
+    '#.##..~~~~.J.....J.~~~~..##.#',
+    '#.#.....L...........L.....#.#',
+    '#.#..###...###.###...###..#.#',
+    '#..........#.....#..........#',
+    '#..S....T..#..~..#..T......X#',
+    '#..........#.....#..........#',
+    '#.#..###...###.###...###..#.#',
+    '#.#.....L...........L.....#.#',
+    '#.##..~~~~.J.....J.~~~~..##.#',
+    '#P....~~~~....T....~~~~.....#',
+    '#############################',
+  ],
+  // Ch.6 Chase Map (Book II Ch.2): Flooded Deep-Sea Sanctum Collapse Hall
+  6: [
+    '#############################',
+    '#P..~~~~....#.....#....~~~~.#',
+    '#.#.~~~~.J..#..L..#..J.~~~~.#',
+    '#.#.........#.....#.........#',
+    '#.#..#####..###.###..#####..#',
+    '#....~~~~~...........~~~~~..#',
+    '#..S.~~~~~..L.....L..~~~~~..X#',
+    '#....~~~~~...........~~~~~..#',
+    '#.#..#####..###.###..#####..#',
+    '#.#.........#.....#.........#',
+    '#.#.~~~~.J..#..L..#..J.~~~~.#',
+    '#P..~~~~....#.....#....~~~~.#',
+    '#############################',
+  ],
+  // Ch.7 Chase Map (Book II Ch.3): Jigoku Blood-River Escape Causeway
+  7: [
+    '#############################',
+    '#P..~~~~~~....G....~~~~~~...#',
+    '#.#.~~~~~~.J.....J.~~~~~~.#.#',
+    '#.#...L.......#.......L...#.#',
+    '#.#..####...#####...####..#.#',
+    '#...........#...#...........#',
+    '#..S....L...........L......X#',
+    '#...........#...#...........#',
+    '#.#..####...#####...####..#.#',
+    '#.#...L.......#.......L...#.#',
+    '#.#.~~~~~~.J.....J.~~~~~~.#.#',
+    '#P..~~~~~~....G....~~~~~~...#',
+    '#############################',
+  ],
+  // Ch.8 Chase Map (Book II Ch.4): Crumbled 2022 Tokyo Highway Overpass Escape
+  8: [
+    '#############################',
+    '#P....F.....##...##.....F...#',
+    '#.##.....J..##...##..J...##.#',
+    '#.#...L........~........L.#.#',
+    '#.#..####...##...##..####.#.#',
+    '#...........##...##.........#',
+    '#..S....L.....~~~.....L....X#',
+    '#...........##...##.........#',
+    '#.#..####...##...##..####.#.#',
+    '#.#...L........~........L.#.#',
+    '#.##.....J..##...##..J...##.#',
+    '#P....F.....##...##.....F...#',
+    '#############################',
+  ],
+};
+
+const SOLID_CHARS = new Set(['#', 'F', 'O', 'G', 'J', 'U']);
 
 const FIXED_PROP_SPOTS: Record<number, Array<{ gx: number; gz: number }>> = {
   1: [
@@ -161,6 +406,24 @@ const FIXED_PROP_SPOTS: Record<number, Array<{ gx: number; gz: number }>> = {
     { gx: 15, gz: 5 },
     { gx: 7, gz: 16 },
     { gx: 15, gz: 16 },
+  ],
+  5: [
+    { gx: 5, gz: 5 },
+    { gx: 18, gz: 5 },
+    { gx: 5, gz: 19 },
+  ],
+  6: [
+    { gx: 7, gz: 10 },
+    { gx: 15, gz: 10 },
+    { gx: 11, gz: 17 },
+  ],
+  7: [
+    { gx: 8, gz: 11 },
+    { gx: 12, gz: 12 },
+  ],
+  8: [
+    { gx: 4, gz: 11 },
+    { gx: 18, gz: 11 },
   ],
 };
 
@@ -222,14 +485,14 @@ function computeBfsDistances(
   return dist;
 }
 
-export function parseChapterMap(chapterId: number): ChapterMapData {
-  const rows = RAW_MAPS[chapterId] || RAW_MAPS[1];
+function parseRawGrid(chapterId: number, rows: string[], isChaseMap: boolean): ChapterMapData {
   const height = rows.length;
   const width = rows[0].length;
   const cells: string[][] = rows.map((r) => r.split(''));
 
   let playerStart = { gx: 1, gz: 1 };
   let exitTile = { gx: width - 2, gz: height - 2 };
+  let poisonWell: { gx: number; gz: number } | undefined;
   let mainCount = 0;
   let batteryCount = 0;
   let diaryCount = 0;
@@ -248,18 +511,22 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
   const walkableTiles: ChapterMapData['walkableTiles'] = [];
   const reservedSet = new Set<string>();
 
-  (FIXED_PROP_SPOTS[chapterId] || []).forEach((sp) => {
-    reservedSet.add(keyOf(sp.gx, sp.gz));
-  });
+  if (!isChaseMap) {
+    (FIXED_PROP_SPOTS[chapterId] || []).forEach((sp) => {
+      reservedSet.add(keyOf(sp.gx, sp.gz));
+    });
+  }
 
-  const mainItemKind: 'key' | 'ofuda' | 'butterfly' | 'seal' =
-    chapterId === 1
-      ? 'key'
-      : chapterId === 2
-        ? 'ofuda'
-        : chapterId === 3
-          ? 'butterfly'
-          : 'seal';
+  const mainItemKind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' =
+    chapterId === 5
+      ? 'rat'
+      : chapterId === 1
+        ? 'key'
+        : chapterId === 2 || chapterId === 6
+          ? 'ofuda'
+          : chapterId === 3 || chapterId === 7
+            ? 'butterfly'
+            : 'seal';
 
   for (let gz = 0; gz < height; gz++) {
     for (let gx = 0; gx < width; gx++) {
@@ -279,6 +546,10 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
       }
       if (ch === 'J') {
         stoneToros.push({ gx, gz });
+        continue;
+      }
+      if (ch === 'U') {
+        poisonWell = { gx, gz };
         continue;
       }
       if (ch === '#') continue;
@@ -351,7 +622,7 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
 
   const pickRandomSlots = (
     count: number,
-    kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary',
+    kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary',
     minStartDist: number,
     minSpacing: number
   ) => {
@@ -384,18 +655,20 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
     }
   };
 
-  pickRandomSlots(mainCount, mainItemKind, 7, 4.2);
-  pickRandomSlots(batteryCount, 'battery', 4, 3.0);
-  pickRandomSlots(diaryCount, 'diary', 4, 3.0);
+  if (!isChaseMap) {
+    pickRandomSlots(mainCount, mainItemKind, 7, 4.2);
+    pickRandomSlots(batteryCount, 'battery', 4, 3.0);
+    pickRandomSlots(diaryCount, 'diary', 4, 3.0);
+  }
 
   // Protect randomized item tiles so silent maze walls never cover collectibles
   pickedItems.forEach((it) => {
     reservedSet.add(keyOf(it.gx, it.gz));
   });
 
-  // Collect interior corridor/wall tiles eligible for silent 5-second maze shifts (Ch.1-3 mazes only; Ch.4 is an open cave boss arena)
+  // Collect interior corridor/wall tiles eligible for silent 5-second maze shifts (exploration chapters only)
   const shiftCandidates: Array<{ gx: number; gz: number }> = [];
-  if (chapterId !== 4) {
+  if (!isChaseMap && chapterId !== 4 && chapterId !== 8) {
     for (let gz = 1; gz < height - 1; gz++) {
       for (let gx = 1; gx < width - 1; gx++) {
         const ch = cells[gz][gx];
@@ -415,6 +688,7 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
     playerStart,
     exitTile,
     items: pickedItems,
+    poisonWell,
     lanterns,
     monsterSpawns,
     desks,
@@ -429,6 +703,14 @@ export function parseChapterMap(chapterId: number): ChapterMapData {
     walkableTiles,
     shiftCandidates,
   };
+}
+
+export function parseChapterMap(chapterId: number): ChapterMapData {
+  return parseRawGrid(chapterId, RAW_MAPS[chapterId] || RAW_MAPS[1], false);
+}
+
+export function parseChaseMap(chapterId: number): ChapterMapData {
+  return parseRawGrid(chapterId, RAW_CHASE_MAPS[chapterId] || RAW_CHASE_MAPS[1], true);
 }
 
 export function gridToWorld(gx: number, gz: number, map: ChapterMapData): { x: number; z: number } {

@@ -39,6 +39,12 @@ export interface ProceduralTextureSet {
   shrineWall: THREE.CanvasTexture;
   caveRockWall: THREE.CanvasTexture;
   caveStoneFloor: THREE.CanvasTexture;
+  islandCliffWall: THREE.CanvasTexture;
+  abyssalSanctumWall: THREE.CanvasTexture;
+  jigokuObsidianWall: THREE.CanvasTexture;
+  jigokuAshFloor: THREE.CanvasTexture;
+  tokyoRuinsWall: THREE.CanvasTexture;
+  tokyoAsphaltFloor: THREE.CanvasTexture;
   ceilingWood: THREE.CanvasTexture;
   ofuda: THREE.CanvasTexture;
   chalkboard: THREE.CanvasTexture;
@@ -58,6 +64,15 @@ export interface ProceduralTextureSet {
   oomukadeFace: THREE.CanvasTexture;
   saigomoFace: THREE.CanvasTexture;
   keikoFace: THREE.CanvasTexture;
+  kyogiFace: THREE.CanvasTexture;
+  nureFace: THREE.CanvasTexture;
+  hyakumeFace: THREE.CanvasTexture;
+  nagisaFace: THREE.CanvasTexture;
+  kuishinboFace: THREE.CanvasTexture;
+  rinMioFace: THREE.CanvasTexture;
+  jigokuWardenFace: THREE.CanvasTexture;
+  senzaiFallenFace: THREE.CanvasTexture;
+  enzukaiFace: THREE.CanvasTexture;
   dispose: () => void;
 }
 
@@ -313,6 +328,137 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     cfCtx.stroke();
   }
   const caveStoneFloor = finalizeTexture(cfC, aniso, 14, 14);
+
+  // 6d. Aogashima Island Weathered Coastal Cliff & Timber Wall (Ch.5)
+  const [icC, icCtx] = makeCanvas(512, 512);
+  icCtx.fillStyle = '#1b2226';
+  icCtx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 60; i++) {
+    const sh = 24 + ((i * 19) % 24);
+    icCtx.fillStyle = `rgb(${sh}, ${sh + 8}, ${sh + 12})`;
+    icCtx.fillRect((i * 79) % 480, (i * 131) % 480, 48 + (i % 34), 32 + (i % 28));
+  }
+  // Barnacle & sea-moss streaks near base
+  icCtx.fillStyle = 'rgba(18, 62, 56, 0.42)';
+  icCtx.fillRect(0, 390, 512, 122);
+  icCtx.fillStyle = '#101417';
+  for (let x = 0; x < 512; x += 64) icCtx.fillRect(x, 0, 5, 512);
+  const islandCliffWall = finalizeTexture(icC, aniso, 1, 1);
+
+  // 6e. Submerged Abyssal Deep-Sea Sanctum Stone Wall (Ch.6)
+  const [asC, asCtx] = makeCanvas(512, 512);
+  asCtx.fillStyle = '#071b22';
+  asCtx.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 512; y += 64) {
+    for (let x = 0; x < 512; x += 128) {
+      const ox = (y / 64) % 2 === 0 ? x : x + 64;
+      asCtx.fillStyle = '#0d2b36';
+      asCtx.fillRect(ox % 512 + 4, y + 4, 120, 56);
+    }
+  }
+  // Luminous cyan seal carvings & sea-slime veins
+  asCtx.strokeStyle = 'rgba(45, 212, 191, 0.35)';
+  asCtx.lineWidth = 3;
+  asCtx.strokeRect(24, 24, 464, 464);
+  asCtx.beginPath();
+  asCtx.arc(256, 256, 86, 0, Math.PI * 2);
+  asCtx.stroke();
+  const abyssalSanctumWall = finalizeTexture(asC, aniso, 1, 1);
+
+  // 6f. Jigoku (Hell) Charred Obsidian & Sulfur Vein Wall (Ch.7)
+  const [joC, joCtx] = makeCanvas(512, 512);
+  joCtx.fillStyle = '#140809';
+  joCtx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 70; i++) {
+    const sh = 18 + ((i * 23) % 22);
+    joCtx.fillStyle = `rgb(${sh + 14}, ${sh}, ${sh})`;
+    joCtx.fillRect((i * 89) % 480, (i * 113) % 480, 44, 44);
+  }
+  joCtx.strokeStyle = 'rgba(234, 88, 12, 0.48)';
+  joCtx.lineWidth = 3;
+  for (let v = 0; v < 7; v++) {
+    joCtx.beginPath();
+    joCtx.moveTo(v * 76, 0);
+    joCtx.lineTo(v * 76 + 24, 256);
+    joCtx.lineTo(v * 76 - 14, 512);
+    joCtx.stroke();
+  }
+  const jigokuObsidianWall = finalizeTexture(joC, aniso, 1, 1);
+
+  // 6g. Jigoku Charred Basalt & Ember Floor (Ch.7)
+  const [jfC, jfCtx] = makeCanvas(512, 512);
+  jfCtx.fillStyle = '#120708';
+  jfCtx.fillRect(0, 0, 512, 512);
+  for (let r = 0; r < 90; r++) {
+    jfCtx.fillStyle = r % 5 === 0 ? 'rgba(180, 42, 16, 0.24)' : 'rgba(28, 14, 14, 0.72)';
+    jfCtx.beginPath();
+    jfCtx.arc((r * 97) % 512, (r * 137) % 512, 12 + (r % 22), 0, Math.PI * 2);
+    jfCtx.fill();
+  }
+  const jigokuAshFloor = finalizeTexture(jfC, aniso, 14, 14);
+
+  // 6h. Ruined 2022 Tokyo Concrete Building & Shattered Glass Wall (Ch.8)
+  const [trC, trCtx] = makeCanvas(512, 512);
+  trCtx.fillStyle = '#25272d';
+  trCtx.fillRect(0, 0, 512, 512);
+  // Concrete panel seams
+  trCtx.strokeStyle = '#141519';
+  trCtx.lineWidth = 5;
+  for (let y = 0; y <= 512; y += 128) {
+    trCtx.beginPath();
+    trCtx.moveTo(0, y);
+    trCtx.lineTo(512, y);
+    trCtx.stroke();
+  }
+  // Shattered modern office windows
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      const wx = 30 + col * 164;
+      const wy = 42 + row * 180;
+      trCtx.fillStyle = '#0d131a';
+      trCtx.fillRect(wx, wy, 124, 118);
+      trCtx.strokeStyle = '#3f4451';
+      trCtx.lineWidth = 4;
+      trCtx.strokeRect(wx, wy, 124, 118);
+      // Cracks & amber reflection
+      trCtx.strokeStyle = 'rgba(250, 204, 21, 0.25)';
+      trCtx.lineWidth = 2;
+      trCtx.beginPath();
+      trCtx.moveTo(wx + 12, wy + 18);
+      trCtx.lineTo(wx + 68, wy + 72);
+      trCtx.lineTo(wx + 110, wy + 104);
+      trCtx.stroke();
+    }
+  }
+  // Scorched blast marks & rebar streaks
+  trCtx.fillStyle = 'rgba(10, 10, 12, 0.52)';
+  trCtx.fillRect(0, 410, 512, 102);
+  const tokyoRuinsWall = finalizeTexture(trC, aniso, 1, 1);
+
+  // 6i. Ruined 2022 Tokyo Kawasaki Cracked Asphalt & Crosswalk Floor (Ch.8)
+  const [taC, taCtx] = makeCanvas(512, 512);
+  taCtx.fillStyle = '#181a20';
+  taCtx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 120; i++) {
+    const sh = 18 + (i % 16);
+    taCtx.fillStyle = `rgb(${sh}, ${sh + 1}, ${sh + 4})`;
+    taCtx.fillRect((i * 67) % 512, (i * 113) % 512, 18, 18);
+  }
+  // Faded road lane stripes
+  taCtx.fillStyle = 'rgba(212, 182, 80, 0.35)';
+  taCtx.fillRect(244, 0, 24, 180);
+  taCtx.fillRect(244, 260, 24, 180);
+  // Cracked fissures
+  taCtx.strokeStyle = '#09090b';
+  taCtx.lineWidth = 3;
+  for (let c = 0; c < 5; c++) {
+    taCtx.beginPath();
+    taCtx.moveTo(c * 110, 0);
+    taCtx.lineTo(c * 110 + 36, 240);
+    taCtx.lineTo(c * 110 - 20, 512);
+    taCtx.stroke();
+  }
+  const tokyoAsphaltFloor = finalizeTexture(taC, aniso, 12, 12);
 
   // 7. Dark Wooden Beam Ceiling
   const [cC, cCtx] = makeCanvas(256, 256);
@@ -627,6 +773,15 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
   const oomukadeFace = createMonsterFaceTexture('oomukade', aniso);
   const saigomoFace = createMonsterFaceTexture('saigomo', aniso);
   const keikoFace = createMonsterFaceTexture('keiko', aniso);
+  const kyogiFace = createMonsterFaceTexture('kyogi', aniso);
+  const nureFace = createMonsterFaceTexture('nure', aniso);
+  const hyakumeFace = createMonsterFaceTexture('hyakume', aniso);
+  const nagisaFace = createMonsterFaceTexture('nagisa', aniso);
+  const kuishinboFace = createMonsterFaceTexture('kuishinbo', aniso);
+  const rinMioFace = createMonsterFaceTexture('rin_mio', aniso);
+  const jigokuWardenFace = createMonsterFaceTexture('jigoku_warden', aniso);
+  const senzaiFallenFace = createMonsterFaceTexture('senzai_fallen', aniso);
+  const enzukaiFace = createMonsterFaceTexture('enzukai', aniso);
 
   return {
     woodFloor,
@@ -640,6 +795,12 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     shrineWall,
     caveRockWall,
     caveStoneFloor,
+    islandCliffWall,
+    abyssalSanctumWall,
+    jigokuObsidianWall,
+    jigokuAshFloor,
+    tokyoRuinsWall,
+    tokyoAsphaltFloor,
     ceilingWood,
     ofuda,
     chalkboard,
@@ -659,6 +820,15 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
     oomukadeFace,
     saigomoFace,
     keikoFace,
+    kyogiFace,
+    nureFace,
+    hyakumeFace,
+    nagisaFace,
+    kuishinboFace,
+    rinMioFace,
+    jigokuWardenFace,
+    senzaiFallenFace,
+    enzukaiFace,
     dispose: () => {
       woodFloor.dispose();
       tatamiFloor.dispose();
@@ -671,6 +841,12 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
       shrineWall.dispose();
       caveRockWall.dispose();
       caveStoneFloor.dispose();
+      islandCliffWall.dispose();
+      abyssalSanctumWall.dispose();
+      jigokuObsidianWall.dispose();
+      jigokuAshFloor.dispose();
+      tokyoRuinsWall.dispose();
+      tokyoAsphaltFloor.dispose();
       ceilingWood.dispose();
       ofuda.dispose();
       chalkboard.dispose();
@@ -690,6 +866,15 @@ export function createProceduralTextures(maxAnisotropy: number): ProceduralTextu
       oomukadeFace.dispose();
       saigomoFace.dispose();
       keikoFace.dispose();
+      kyogiFace.dispose();
+      nureFace.dispose();
+      hyakumeFace.dispose();
+      nagisaFace.dispose();
+      kuishinboFace.dispose();
+      rinMioFace.dispose();
+      jigokuWardenFace.dispose();
+      senzaiFallenFace.dispose();
+      enzukaiFace.dispose();
     },
   };
 }
@@ -881,6 +1066,276 @@ function createMonsterFaceTexture(monsterId: MonsterId, anisotropy: number): THR
     ctx.beginPath();
     ctx.ellipse(128, 178, 32, 9, 0, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  if (monsterId === 'kyogi') {
+    // Kyogi: Black & gold Kiiroibara Cultist mask with glowing yellow slit eyes & rose emblem
+    ctx.fillStyle = '#141115';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#ca8a04';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(18, 18, 220, 220);
+    // Yellow rose sigil on forehead
+    ctx.fillStyle = '#eab308';
+    ctx.beginPath();
+    ctx.arc(128, 52, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#422006';
+    ctx.beginPath();
+    ctx.arc(128, 52, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Slit golden eyes
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.ellipse(84, 108, 20, 9, -0.22, 0, Math.PI * 2);
+    ctx.ellipse(172, 108, 20, 9, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#09090b';
+    ctx.fillRect(82, 100, 4, 16);
+    ctx.fillRect(170, 100, 4, 16);
+    // Sinister gold-stitched grin
+    ctx.strokeStyle = '#eab308';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(64, 170);
+    ctx.quadraticCurveTo(128, 208, 192, 170);
+    ctx.stroke();
+  } else if (monsterId === 'nagisa') {
+    // Nagisa: Deep-sea serpent scales with luminous teal eyes & sharp fangs
+    ctx.fillStyle = '#07222b';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#0e3c4a';
+    for (let y = 0; y < 256; y += 26) {
+      for (let x = (y % 52 === 0 ? 0 : 14); x < 256; x += 28) {
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0, Math.PI);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = '#2dd4bf';
+    ctx.beginPath();
+    ctx.ellipse(82, 98, 20, 13, 0.15, 0, Math.PI * 2);
+    ctx.ellipse(174, 98, 20, 13, -0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#042f2e';
+    ctx.fillRect(80, 86, 4, 24);
+    ctx.fillRect(172, 86, 4, 24);
+    ctx.fillStyle = '#030b0e';
+    ctx.beginPath();
+    ctx.ellipse(128, 176, 58, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ccfbf1';
+    for (let i = 0; i < 6; i++) {
+      const fx = 76 + i * 20;
+      ctx.beginPath();
+      ctx.moveTo(fx, 148);
+      ctx.lineTo(fx + 6, 178);
+      ctx.lineTo(fx + 12, 148);
+      ctx.fill();
+    }
+  } else if (monsterId === 'kuishinbo') {
+    // Kuishinbo: Bloated ash flesh covered in dark slime & giant gaping toothed maw
+    ctx.fillStyle = '#3b2b2e';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = 'rgba(10, 8, 12, 0.55)';
+    for (let i = 0; i < 12; i++) {
+      ctx.fillRect(18 + i * 20, 0, 10, 60 + (i % 4) * 35);
+    }
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(82, 78, 18, 0, Math.PI * 2);
+    ctx.arc(174, 78, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fb7185';
+    ctx.beginPath();
+    ctx.arc(82, 78, 5, 0, Math.PI * 2);
+    ctx.arc(174, 78, 5, 0, Math.PI * 2);
+    ctx.fill();
+    // Huge circular devouring mouth
+    ctx.fillStyle = '#140307';
+    ctx.beginPath();
+    ctx.ellipse(128, 168, 72, 54, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e7e5e4';
+    for (let i = 0; i < 7; i++) {
+      const fx = 68 + i * 18;
+      ctx.beginPath();
+      ctx.moveTo(fx, 120);
+      ctx.lineTo(fx + 7, 152);
+      ctx.lineTo(fx + 14, 120);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(fx, 214);
+      ctx.lineTo(fx + 7, 184);
+      ctx.lineTo(fx + 14, 214);
+      ctx.fill();
+    }
+  } else if (monsterId === 'rin_mio') {
+    // Rin & Mio: Pale weeping face with blood tears & dark hollow gaze
+    ctx.fillStyle = '#dfd8d4';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#881337';
+    ctx.fillRect(74, 114, 14, 102);
+    ctx.fillRect(168, 114, 14, 102);
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.ellipse(82, 100, 20, 22, 0, 0, Math.PI * 2);
+    ctx.ellipse(174, 100, 20, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#f472b6';
+    ctx.beginPath();
+    ctx.arc(82, 100, 5, 0, Math.PI * 2);
+    ctx.arc(174, 100, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#4c0519';
+    ctx.beginPath();
+    ctx.ellipse(128, 182, 32, 20, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (monsterId === 'enzukai') {
+    // Enzukai: Golden Hannya Demon Mask with crimson sclera, glaring amber eyes & fangs
+    ctx.fillStyle = '#d4a11c';
+    ctx.fillRect(0, 0, 256, 256);
+    const eGrad = ctx.createRadialGradient(128, 128, 30, 128, 128, 145);
+    eGrad.addColorStop(0, 'rgba(254, 240, 138, 0.28)');
+    eGrad.addColorStop(1, 'rgba(42, 18, 4, 0.65)');
+    ctx.fillStyle = eGrad;
+    ctx.fillRect(0, 0, 256, 256);
+    // Fierce Hannya brow furrows
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(46, 72);
+    ctx.lineTo(106, 94);
+    ctx.moveTo(210, 72);
+    ctx.lineTo(150, 94);
+    ctx.stroke();
+    // Glowing demonic eyes
+    ctx.fillStyle = '#180505';
+    ctx.beginPath();
+    ctx.ellipse(84, 108, 22, 16, 0.14, 0, Math.PI * 2);
+    ctx.ellipse(172, 108, 22, 16, -0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath();
+    ctx.arc(84, 108, 6, 0, Math.PI * 2);
+    ctx.arc(172, 108, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Snarling Hannya mouth with tusks
+    ctx.fillStyle = '#2a0408';
+    ctx.beginPath();
+    ctx.moveTo(56, 174);
+    ctx.quadraticCurveTo(128, 218, 200, 174);
+    ctx.quadraticCurveTo(128, 152, 56, 174);
+    ctx.fill();
+    ctx.fillStyle = '#fefce8';
+    ctx.beginPath();
+    ctx.moveTo(74, 168);
+    ctx.lineTo(84, 198);
+    ctx.lineTo(94, 172);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(182, 168);
+    ctx.lineTo(172, 198);
+    ctx.lineTo(162, 172);
+    ctx.fill();
+  } else if (monsterId === 'nure') {
+    // Nure: Sea-serpent woman with pallid wet skin, golden slit eyes & venomous fangs
+    ctx.fillStyle = '#0d262b';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#a7f3d0';
+    ctx.beginPath();
+    ctx.ellipse(84, 102, 18, 12, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(172, 102, 18, 12, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#042f2e';
+    ctx.fillRect(82, 92, 4, 20);
+    ctx.fillRect(170, 92, 4, 20);
+    ctx.fillStyle = '#061215';
+    ctx.beginPath();
+    ctx.ellipse(128, 180, 48, 28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ecfeff';
+    ctx.beginPath();
+    ctx.moveTo(92, 158);
+    ctx.lineTo(100, 194);
+    ctx.lineTo(108, 158);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(148, 158);
+    ctx.lineTo(156, 194);
+    ctx.lineTo(164, 158);
+    ctx.fill();
+  } else if (monsterId === 'hyakume') {
+    // Hyakume: One-eyed giant cyclops with massive glowing crimson-amber central eye
+    ctx.fillStyle = '#2d2326';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.ellipse(128, 102, 62, 42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#b91c1c';
+    ctx.beginPath();
+    ctx.arc(128, 102, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(128, 102, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#120508';
+    ctx.beginPath();
+    ctx.ellipse(128, 190, 56, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (monsterId === 'jigoku_warden') {
+    // Jigoku Warden: Pale spectral ferryman mask with hollow violet sockets & sewn mouth
+    ctx.fillStyle = '#1b1426';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#c4b5fd';
+    ctx.beginPath();
+    ctx.ellipse(128, 128, 92, 108, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.ellipse(86, 106, 20, 24, 0, 0, Math.PI * 2);
+    ctx.ellipse(170, 106, 20, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e879f9';
+    ctx.beginPath();
+    ctx.arc(86, 106, 5, 0, Math.PI * 2);
+    ctx.arc(170, 106, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#18181b';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(74, 178);
+    ctx.lineTo(182, 178);
+    ctx.stroke();
+  } else if (monsterId === 'senzai_fallen') {
+    // Fallen Senzai: Pale scarred brother with forehead scar & glowing golden jealousy eyes
+    ctx.fillStyle = '#cbc6be';
+    ctx.fillRect(0, 0, 256, 256);
+    // Childhood forehead scar from his father
+    ctx.strokeStyle = '#7f1d1d';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(74, 24);
+    ctx.lineTo(116, 78);
+    ctx.stroke();
+    ctx.fillStyle = '#181208';
+    ctx.beginPath();
+    ctx.ellipse(84, 106, 18, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(172, 106, 18, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(84, 106, 6, 0, Math.PI * 2);
+    ctx.arc(172, 106, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(84, 180);
+    ctx.quadraticCurveTo(128, 160, 172, 180);
+    ctx.stroke();
   }
 
   return finalizeTexture(canvas, anisotropy, 1, 1);

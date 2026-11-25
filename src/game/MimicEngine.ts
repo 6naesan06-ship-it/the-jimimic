@@ -11,6 +11,7 @@ import {
   hasLineOfSight,
   isWall,
   parseChapterMap,
+  parseChaseMap,
   worldToGrid,
 } from './maps';
 import {
@@ -35,6 +36,7 @@ import {
   createHospitalGurney,
   createMonsterRig,
   createPaperLantern,
+  createPoisonWellProp,
   createSacredTree,
   createSchoolBulletinBoard,
   createSchoolDesk,
@@ -47,6 +49,7 @@ import {
   createTelegraphRing,
   createToriiGate,
   createWallTalismanCluster,
+  setSwordWhiteFlame,
 } from './models';
 import { soundEngine } from './soundEngine';
 import { ProceduralTextureSet, createProceduralTextures } from './textures';
@@ -82,6 +85,11 @@ export interface HudSnapshot {
   bossStunTimer: number;
   bossAttackWarning: string | null;
   bossHitsLanded: number;
+  finalChaseActive: boolean;
+  finalChaseElapsed: number;
+  inChaseMap: boolean;
+  carriedRat: 'none' | 'raw' | 'poisoned';
+  difficulty: DifficultyMode;
 }
 
 export interface EngineCallbacks {
@@ -98,7 +106,7 @@ export interface EngineCallbacks {
 
 interface CollectibleEntity {
   id: string;
-  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary';
+  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary';
   diaryId?: string;
   mesh: THREE.Group;
   light?: THREE.PointLight;
@@ -228,6 +236,14 @@ export class MimicEngine {
   private exitPortalLight: THREE.PointLight | null = null;
   private exitGateGroup: THREE.Group | null = null;
   private basementDoorRig: BasementDoorRig | null = null;
+  private finalChaseActive = false;
+  private finalChaseElapsed = 0;
+  private finalChaseTremorTimer = 0;
+  private inChaseMap = false;
+  private carriedRat: 'none' | 'raw' | 'poisoned' = 'none';
+  private ratsFedCount = 0;
+  private poisonWellPos: { x: number; z: number } | null = null;
+  private poisonWellLight: THREE.PointLight | null = null;
 
   // Chapter 4 Blessed Sword & Boss Combat state
   private swordGroup: THREE.Group | null = null;
@@ -408,6 +424,18 @@ export class MimicEngine {
     this.renderer.setSize(w, h);
   };
 
+  private isBossChapter(chId = this.chapterId): boolean {
+    return chId === 4 || chId === 8;
+  }
+
+  private getBossId(): MonsterId {
+    return this.chapterId === 8 ? 'enzukai' : 'saigomo';
+  }
+
+  private getBossMinionId(): MonsterId {
+    return this.chapterId === 8 ? 'senzai_fallen' : 'keiko';
+  }
+
   private handleKeyDown = (e: KeyboardEvent) => {
     const code = e.code;
     this.keys.add(code);
@@ -419,13 +447,13 @@ export class MimicEngine {
     } else if (code === 'KeyC') {
       this.crouching = !this.crouching;
     } else if (code === 'KeyE') {
-      if (this.chapterId === 4 && !this.hasNearbyInteractable()) {
+      if (this.isBossChapter() && !this.inChaseMap && !this.hasNearbyInteractable()) {
         this.triggerSwordAttack();
       } else {
         this.triggerInteract();
       }
     } else if (code === 'Space') {
-      if (this.chapterId === 4) {
+      if (this.isBossChapter()) {
         e.preventDefault();
         this.triggerSwordAttack();
       }
@@ -449,7 +477,7 @@ export class MimicEngine {
     this.lastPointerX = e.clientX;
     this.lastPointerY = e.clientY;
 
-    if (e.button === 0 && this.chapterId === 4) {
+    if (e.button === 0 && this.isBossChapter() && !this.inChaseMap) {
       this.triggerSwordAttack();
     }
 
@@ -534,7 +562,7 @@ export class MimicEngine {
   }
 
   public triggerSwordAttack() {
-    if (this.mode !== 'playing' || this.chapterId !== 4) return;
+    if (this.mode !== 'playing' || !this.isBossChapter() || this.inChaseMap) return;
     if (this.swordCooldown > 0) return;
 
     const isHacker = this.jobId === 'hacker';
@@ -553,9 +581,16 @@ export class MimicEngine {
       }
     }
     if (
-      this.chapterId !== 4 &&
+      this.chapterId === 5 &&
+      !this.inChaseMap &&
+      this.poisonWellPos &&
+      Math.hypot(this.poisonWellPos.x - this.playerX, this.poisonWellPos.z - this.playerZ) < 2.85
+    ) {
+      return true;
+    }
+    if (
       this.exitUnlocked &&
-      Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ) < 2.6
+      Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ) < 2.75
     ) {
       return true;
     }
@@ -569,24 +604,27 @@ export class MimicEngine {
     this.maxSkillCooldown = jobMeta.cooldownSec;
     soundEngine.playPortalUnlock();
 
+    const stunDur = this.difficulty === 'nightmare' ? 2.4 : 3.0;
     if (this.jobId === 'student') {
       this.skillActiveTimer = 5.0;
       this.stamina = this.maxStamina;
       this.callbacks.onSystemNotice('질주 본능 발동! 5초간 이동 속도가 크게 상승합니다.');
     } else if (this.jobId === 'police') {
       let stunned = 0;
+      const bossId = this.getBossId();
+      const bossName = bossId === 'enzukai' ? '엔즈카이' : '사이고모';
       for (const m of this.monsters) {
         if (Math.hypot(m.x - this.playerX, m.z - this.playerZ) <= 13.5) {
           m.stunTimer = 3.5;
           m.state = 'patrol';
-          if (this.chapterId === 4 && m.id === 'saigomo') {
-            this.stunSaigomo(3.0, '전술 섬광탄 명중! 사이고모가 3초간 스턴 상태에 빠졌습니다!');
+          if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked && m.id === bossId) {
+            this.stunBoss(stunDur, `전술 섬광탄 명중! ${bossName}가 ${stunDur}초간 스턴 상태에 빠졌습니다!`);
           }
           stunned++;
         }
       }
       this.flashlight.intensity = 42;
-      if (this.chapterId !== 4) {
+      if (!this.isBossChapter() || this.inChaseMap) {
         this.callbacks.onSystemNotice(
           stunned > 0
             ? `전술 섬광탄 명중! 괴물 ${stunned}체를 3.5초간 경직시켰습니다.`
@@ -597,7 +635,7 @@ export class MimicEngine {
       this.stamina = this.maxStamina;
       this.exhausted = false;
       this.battery = Math.min(100, this.battery + 25);
-      if (this.chapterId === 4) {
+      if (this.isBossChapter() && !this.inChaseMap) {
         this.playerHp = Math.min(this.playerMaxHp, this.playerHp + 35);
         this.callbacks.onSystemNotice('아드레날린 주사! HP +35, 스태미나 100%, 배터리 +25% 회복');
       } else {
@@ -605,17 +643,19 @@ export class MimicEngine {
       }
     } else if (this.jobId === 'exorcist') {
       let sealed = 0;
+      const bossId = this.getBossId();
+      const bossName = bossId === 'enzukai' ? '엔즈카이' : '사이고모';
       for (const m of this.monsters) {
         if (Math.hypot(m.x - this.playerX, m.z - this.playerZ) <= 16.0) {
           m.stunTimer = 5.0;
           m.state = 'patrol';
-          if (this.chapterId === 4 && m.id === 'saigomo') {
-            this.stunSaigomo(3.0, '정화의 오후다! 사이고모가 3초간 스턴 봉인되었습니다!');
+          if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked && m.id === bossId) {
+            this.stunBoss(stunDur, `정화의 오후다! ${bossName}가 ${stunDur}초간 스턴 봉인되었습니다!`);
           }
           sealed++;
         }
       }
-      if (this.chapterId !== 4) {
+      if (!this.isBossChapter() || this.inChaseMap) {
         this.callbacks.onSystemNotice(
           sealed > 0
             ? `정화의 오후다! 주변 괴물 ${sealed}체를 5초간 봉인했습니다.`
@@ -633,13 +673,19 @@ export class MimicEngine {
       this.battery = 100;
       this.playerHp = this.playerMaxHp;
 
-      if (this.chapterId === 4) {
-        this.stunSaigomo(6.0, '시스템 지배! 사이고모에게 강력한 성검 참격(-150 HP) 및 6초 스턴!');
+      if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked) {
+        const bossName = this.chapterId === 8 ? '엔즈카이' : '사이고모';
+        this.stunBoss(6.0, `시스템 지배! ${bossName}에게 강력한 성검 참격(-150 HP) 및 6초 스턴!`);
         this.damageBoss(150);
         return;
       }
 
       if (!this.exitUnlocked) {
+        if (this.chapterId === 5) {
+          this.carriedRat = 'none';
+          this.advanceChapter5Feeding(true);
+          return;
+        }
         let nearestMain: CollectibleEntity | null = null;
         let bestD = Infinity;
         for (const item of this.collectibles) {
@@ -659,27 +705,11 @@ export class MimicEngine {
           return;
         }
       } else if (this.mapData) {
-        const dirs = [
-          [0, -1],
-          [-1, 0],
-          [1, 0],
-          [0, 1],
-        ];
-        for (const [ox, oz] of dirs) {
-          const tx = this.mapData.exitTile.gx + ox;
-          const tz = this.mapData.exitTile.gz + oz;
-          if (!isWall(tx, tz, this.mapData)) {
-            const safePos = gridToWorld(tx, tz, this.mapData);
-            this.playerX = safePos.x;
-            this.playerZ = safePos.z;
-            this.yaw = Math.atan2(-(this.exitPos.x - this.playerX), -(this.exitPos.z - this.playerZ));
-            break;
-          }
-        }
+        this.warpPlayerNearExit();
         this.callbacks.onSystemNotice(
-          this.chapterId === 1
+          this.chapterId === 1 && !this.inChaseMap
             ? '시스템 지배! 전 괴물 12초 정지 및 지하실 문 앞 안전 지대로 순간이동했습니다!'
-            : '시스템 지배! 전 괴물 12초 정지 및 탈출 도리이 앞 안전 지대로 순간이동했습니다!'
+            : '시스템 지배! 전 괴물 12초 정지 및 탈출 출구 앞 안전 지대로 순간이동했습니다!'
         );
         return;
       }
@@ -695,17 +725,28 @@ export class MimicEngine {
       this.battery = 100;
       this.playerHp = this.playerMaxHp;
 
-      if (this.chapterId === 4) {
+      if (this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked) {
         for (const p of this.bossProjectiles) {
           this.worldGroup.remove(p.mesh);
         }
         this.bossProjectiles = [];
-        this.stunSaigomo(5.0, '시스템 백도어! 보스 탄막 삭제 · 결계 파괴(-250 HP) 및 5초 스턴!');
+        const bossName = this.chapterId === 8 ? '엔즈카이' : '사이고모';
+        this.stunBoss(5.0, `시스템 백도어! 탄막 삭제 · ${bossName} 결계 파괴(-250 HP) 및 5초 스턴!`);
         this.damageBoss(250);
         return;
       }
 
       if (!this.exitUnlocked) {
+        if (this.chapterId === 5) {
+          this.carriedRat = 'none';
+          while (this.ratsFedCount < 3) {
+            this.advanceChapter5Feeding(false);
+          }
+          this.callbacks.onSystemNotice(
+            '시스템 백도어! 전 괴물 15초 마비 및 미오와 린에게 독 쥐 3회 먹이기를 강제 완료했습니다!'
+          );
+          return;
+        }
         let hackedCount = 0;
         for (const item of this.collectibles) {
           if (item.collected) continue;
@@ -720,31 +761,37 @@ export class MimicEngine {
           return;
         }
       } else if (this.mapData) {
-        const dirs = [
-          [0, -1],
-          [-1, 0],
-          [1, 0],
-          [0, 1],
-        ];
-        for (const [ox, oz] of dirs) {
-          const tx = this.mapData.exitTile.gx + ox;
-          const tz = this.mapData.exitTile.gz + oz;
-          if (!isWall(tx, tz, this.mapData)) {
-            const safePos = gridToWorld(tx, tz, this.mapData);
-            this.playerX = safePos.x;
-            this.playerZ = safePos.z;
-            this.yaw = Math.atan2(-(this.exitPos.x - this.playerX), -(this.exitPos.z - this.playerZ));
-            break;
-          }
-        }
+        this.warpPlayerNearExit();
         this.callbacks.onSystemNotice(
-          this.chapterId === 1
+          this.chapterId === 1 && !this.inChaseMap
             ? '시스템 백도어! 전 괴물 15초 마비 및 지하실 문 앞 안전 지대로 워프했습니다!'
-            : '시스템 백도어! 전 괴물 15초 마비 및 탈출 도리이 앞 안전 지대로 워프했습니다!'
+            : '시스템 백도어! 전 괴물 15초 마비 및 탈출 출구 앞 안전 지대로 워프했습니다!'
         );
         return;
       }
       this.callbacks.onSystemNotice('시스템 백도어! 전 괴물을 15초간 강제 마비시켰습니다.');
+    }
+  }
+
+  private warpPlayerNearExit() {
+    if (!this.mapData) return;
+    const exitGrid = worldToGrid(this.exitPos.x, this.exitPos.z, this.mapData);
+    const dirs = [
+      [0, -1],
+      [-1, 0],
+      [1, 0],
+      [0, 1],
+    ];
+    for (const [ox, oz] of dirs) {
+      const tx = exitGrid.gx + ox;
+      const tz = exitGrid.gz + oz;
+      if (!isWall(tx, tz, this.mapData)) {
+        const safePos = gridToWorld(tx, tz, this.mapData);
+        this.playerX = safePos.x;
+        this.playerZ = safePos.z;
+        this.yaw = Math.atan2(-(this.exitPos.x - this.playerX), -(this.exitPos.z - this.playerZ));
+        break;
+      }
     }
   }
 
@@ -756,7 +803,12 @@ export class MimicEngine {
       this.releasePointerLock();
       soundEngine.stopBgm();
     } else {
-      soundEngine.startBgm(this.chapterId, this.chapterId === 4);
+      soundEngine.startBgm(
+        this.chapterId,
+        this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked,
+        this.inChaseMap || this.finalChaseActive,
+        this.difficulty === 'nightmare'
+      );
     }
   }
 
@@ -803,6 +855,8 @@ export class MimicEngine {
     this.monsters = [];
     this.exitPortalLight = null;
     this.exitGateGroup = null;
+    this.poisonWellPos = null;
+    this.poisonWellLight = null;
     this.titleBoss = null;
     if (this.kintoruControlActive) {
       this.kintoruControlActive = false;
@@ -882,13 +936,19 @@ export class MimicEngine {
 
     this.mode = 'playing';
     this.elapsedSeconds = 0;
-    const isBossFight = chapterId === 4;
+    const isBossFight = this.isBossChapter(chapterId);
+    this.inChaseMap = false;
+    this.carriedRat = 'none';
+    this.ratsFedCount = 0;
     this.collectedItems = 0;
     this.requiredItems = isBossFight ? 0 : meta.requiredItems;
     this.exitUnlocked = false;
+    this.finalChaseActive = false;
+    this.finalChaseElapsed = 0;
+    this.finalChaseTremorTimer = 0;
     this.activeWallHeight = isBossFight ? WALL_HEIGHT * 2.0 : WALL_HEIGHT;
 
-    // Reset Chapter 4 Boss & Sword Combat state
+    // Reset Chapter 4 / 8 Boss & Sword Combat state
     this.playerMaxHp = 100;
     this.playerHp = 100;
     this.hurtFlash = 0;
@@ -899,14 +959,15 @@ export class MimicEngine {
     this.swordHitApplied = false;
     if (this.swordGroup) {
       this.swordGroup.visible = isBossFight;
+      setSwordWhiteFlame(this.swordGroup, chapterId === 8);
     }
-    this.bossMaxHp = isBossFight ? (difficulty === 'nightmare' ? 1100 : 1000) : 1000;
+    this.bossMaxHp = isBossFight ? (difficulty === 'nightmare' ? 1400 : 1000) : 1000;
     this.bossHp = this.bossMaxHp;
     this.bossHitsLanded = 0;
     this.bossStunTimer = 0;
     this.bossState = 'stalk';
     this.bossStateTimer = 0;
-    this.bossAttackCooldown = 1.5;
+    this.bossAttackCooldown = difficulty === 'nightmare' ? 1.15 : 1.5;
     this.bossAttackCount = 0;
     this.bossPattern = 'lunge';
     this.bossAttackHitDone = false;
@@ -931,50 +992,121 @@ export class MimicEngine {
     this.halfSubtitleShown = false;
     this.jumpscareMonster = null;
     this.kintoruControlActive = false;
-    this.kintoruNextTimer =
-      chapterId >= 2
-        ? (chapterId === 4 ? 17 : 13) + Math.random() * 6
-        : 999999;
+    const isNightmare = difficulty === 'nightmare';
+    const hasMindControlQte = isNightmare || (chapterId >= 2 && chapterId <= 4) || chapterId >= 6;
+    this.kintoruNextTimer = hasMindControlQte
+      ? (isNightmare ? 9 : isBossFight ? 17 : 13) + Math.random() * 5
+      : 999999;
     this.keys.clear();
+
+    this.buildWorldFromMapData(map, false);
+
+    // Monsters
+    const speedScale = isNightmare ? 1.32 : 1.0;
+    const spawnList: MonsterId[] = [...meta.monsters];
+    if (isNightmare && !isBossFight && meta.monsters.length > 0) {
+      // Nightmare Mode spawns an extra relentless stalker
+      spawnList.push(meta.monsters[0]);
+    }
+    this.spawnMonstersFromList(spawnList, map, speedScale, isBossFight, false);
+
+    // Place Player at Start
+    const startWorld = gridToWorld(map.playerStart.gx, map.playerStart.gz, map);
+    this.playerX = startWorld.x;
+    this.playerZ = startWorld.z;
+    this.yaw = isBossFight ? 0 : -Math.PI / 2;
+    this.pitch = 0;
+
+    soundEngine.startBgm(chapterId, isBossFight, false, isNightmare);
+    this.pushHudSnapshot(null, 99, null, false);
+    this.callbacks.onSubtitle(meta.subtitles.onStart);
+  }
+
+  private buildWorldFromMapData(map: ChapterMapData, isChaseMap: boolean) {
+    const chapterId = this.chapterId;
+    const jobId = this.jobId;
+    const isNightmare = this.difficulty === 'nightmare';
+    const isBossFight = this.isBossChapter(chapterId) && !isChaseMap;
+    const meta = CHAPTERS.find((c) => c.id === chapterId) || CHAPTERS[0];
+    this.activeWallHeight = isBossFight ? WALL_HEIGHT * 2.0 : WALL_HEIGHT;
 
     const isHacker = jobId === 'hacker';
     const isGodJob = jobId === 'developer' || isHacker;
 
-    // Configure Job Flashlight Optics
+    // Configure Job + Nightmare Flashlight Optics
+    const nmRangeScale = isNightmare && !isGodJob ? 0.82 : 1.0;
     if (isGodJob) {
       this.flashlight.distance = 68;
       this.flashlight.angle = Math.PI / 2.8;
     } else if (jobId === 'police') {
-      this.flashlight.distance = 48;
+      this.flashlight.distance = 48 * nmRangeScale;
       this.flashlight.angle = Math.PI / 3.3;
     } else {
-      this.flashlight.distance = isBossFight ? 46 : 38;
-      this.flashlight.angle = Math.PI / 3.8;
+      this.flashlight.distance = (isBossFight ? 46 : 38) * nmRangeScale;
+      this.flashlight.angle = isNightmare ? Math.PI / 4.2 : Math.PI / 3.8;
     }
 
-    // Dark base illumination so flashlight is needed, while allowing the stronger beam to cut through fog
-    const fogDensity = isBossFight
+    const baseFogColor = isChaseMap
+      ? chapterId >= 5
+        ? 0x240716
+        : 0x240408
+      : isNightmare
+        ? 0x120205
+        : meta.fogColor;
+    const baseFog = isBossFight
       ? isGodJob
         ? 0.022
         : 0.038
       : isGodJob
         ? meta.fogDensity * 0.48
         : meta.fogDensity * 0.8;
-    this.scene.background = new THREE.Color(meta.fogColor);
-    this.scene.fog = new THREE.FogExp2(meta.fogColor, fogDensity);
-    this.scene.environmentIntensity = isGodJob ? 0.46 : isBossFight ? 0.18 : 0.11;
-    this.ambientLight.color.setHex(meta.ambientColor);
-    this.ambientLight.intensity = isGodJob ? 0.36 : isBossFight ? 0.16 : 0.07;
-    this.hemiLight.intensity = isGodJob ? 0.4 : isBossFight ? 0.16 : 0.09;
+    const fogDensity = baseFog * (isNightmare ? 1.42 : 1.0);
+
+    this.scene.background = new THREE.Color(baseFogColor);
+    this.scene.fog = new THREE.FogExp2(baseFogColor, fogDensity);
+    this.scene.environmentIntensity = isGodJob
+      ? 0.46
+      : isNightmare
+        ? 0.055
+        : isBossFight
+          ? 0.18
+          : 0.11;
+    this.ambientLight.color.setHex(isNightmare ? 0x1a0408 : meta.ambientColor);
+    this.ambientLight.intensity = isGodJob
+      ? 0.36
+      : isNightmare
+        ? isBossFight
+          ? 0.075
+          : 0.03
+        : isBossFight
+          ? 0.16
+          : 0.07;
+    this.hemiLight.intensity = isGodJob
+      ? 0.4
+      : isNightmare
+        ? isBossFight
+          ? 0.08
+          : 0.035
+        : isBossFight
+          ? 0.16
+          : 0.09;
 
     if (isGodJob) {
       this.playerFillLight.color.setHex(isHacker ? 0xa5f3fc : 0xe0f2fe);
       this.playerFillLight.intensity = isHacker ? 2.8 : 2.6;
       this.playerFillLight.distance = 16.0;
     } else {
-      this.playerFillLight.color.setHex(isBossFight ? 0x7f2d34 : 0x475569);
-      this.playerFillLight.intensity = isBossFight ? 0.48 : 0.34;
-      this.playerFillLight.distance = isBossFight ? 5.2 : 4.0;
+      this.playerFillLight.color.setHex(
+        isNightmare ? 0x5c191f : chapterId === 8 ? 0x854d0e : isBossFight ? 0x7f2d34 : 0x475569
+      );
+      this.playerFillLight.intensity = isNightmare
+        ? isBossFight
+          ? 0.32
+          : 0.22
+        : isBossFight
+          ? 0.48
+          : 0.34;
+      this.playerFillLight.distance = isNightmare ? 3.2 : isBossFight ? 5.2 : 4.0;
     }
 
     // Floor & Ceiling
@@ -983,9 +1115,13 @@ export class MimicEngine {
         ? this.textures.woodFloor
         : chapterId === 2
           ? this.textures.tatamiFloor
-          : isBossFight
+          : chapterId === 4
             ? this.textures.caveStoneFloor
-            : this.textures.shrineStone;
+            : chapterId === 7
+              ? this.textures.jigokuAshFloor
+              : chapterId === 8
+                ? this.textures.tokyoAsphaltFloor
+                : this.textures.shrineStone;
 
     const mapW = map.width * TILE_SIZE;
     const mapH = map.height * TILE_SIZE;
@@ -993,7 +1129,7 @@ export class MimicEngine {
     const floorMat = new THREE.MeshStandardMaterial({
       map: floorTex,
       roughness: chapterId >= 3 ? 0.74 : 0.82,
-      metalness: chapterId >= 3 ? 0.14 : 0.04,
+      metalness: chapterId === 8 || chapterId === 6 ? 0.22 : chapterId >= 3 ? 0.14 : 0.04,
     });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(mapW, mapH), floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -1004,9 +1140,15 @@ export class MimicEngine {
       map:
         chapterId === 1
           ? this.textures.schoolCeiling
-          : isBossFight
+          : chapterId === 4
             ? this.textures.caveRockWall
-            : this.textures.ceilingWood,
+            : chapterId === 6
+              ? this.textures.abyssalSanctumWall
+              : chapterId === 7
+                ? this.textures.jigokuObsidianWall
+                : chapterId === 8
+                  ? this.textures.tokyoRuinsWall
+                  : this.textures.ceilingWood,
       roughness: isBossFight ? 0.94 : chapterId === 1 ? 0.85 : 0.92,
       metalness: 0.04,
     });
@@ -1015,14 +1157,14 @@ export class MimicEngine {
     ceiling.position.y = this.activeWallHeight;
     this.worldGroup.add(ceiling);
 
-    // Flooded Swamp / Blood Pool Overlay (~ tiles)
+    // Flooded Swamp / Blood Pool / Deep Sea Overlay (~ tiles)
     if (map.waterTiles.length > 0) {
       const waterMat = new THREE.MeshStandardMaterial({
-        map: chapterId === 4 ? this.textures.bloodWater : this.textures.shrineWater,
+        map: chapterId === 4 || chapterId === 7 ? this.textures.bloodWater : this.textures.shrineWater,
         roughness: 0.12,
         metalness: 0.72,
         transparent: true,
-        opacity: 0.84,
+        opacity: chapterId === 6 ? 0.9 : 0.84,
         polygonOffset: true,
         polygonOffsetFactor: -1,
         polygonOffsetUnits: -1,
@@ -1045,14 +1187,24 @@ export class MimicEngine {
     const wallTex =
       chapterId === 1
         ? this.textures.schoolWall
-        : isBossFight
-          ? this.textures.caveRockWall
-          : this.textures.shojiWall;
+        : chapterId === 3
+          ? this.textures.shrineWall
+          : chapterId === 4
+            ? this.textures.caveRockWall
+            : chapterId === 5
+              ? this.textures.islandCliffWall
+              : chapterId === 6
+                ? this.textures.abyssalSanctumWall
+                : chapterId === 7
+                  ? this.textures.jigokuObsidianWall
+                  : chapterId === 8
+                    ? this.textures.tokyoRuinsWall
+                    : this.textures.shojiWall;
 
     const wallMat = new THREE.MeshStandardMaterial({
       map: wallTex,
       roughness: isBossFight ? 0.92 : 0.85,
-      metalness: isBossFight ? 0.1 : 0.05,
+      metalness: chapterId === 8 ? 0.18 : isBossFight ? 0.1 : 0.05,
     });
 
     const shiftKeySet = new Set<string>();
@@ -1117,9 +1269,9 @@ export class MimicEngine {
       }
       if (beamSpots.length > 0) {
         const beamMat = new THREE.MeshStandardMaterial({
-          color: chapterId === 1 ? 0x2b3036 : 0x1b120d,
-          roughness: chapterId === 1 ? 0.55 : 0.85,
-          metalness: chapterId === 1 ? 0.55 : 0.08,
+          color: chapterId === 1 || chapterId === 6 ? 0x2b3036 : 0x1b120d,
+          roughness: chapterId === 1 || chapterId === 6 ? 0.55 : 0.85,
+          metalness: chapterId === 1 || chapterId === 6 ? 0.55 : 0.08,
         });
         const beamGeo = new THREE.BoxGeometry(0.24, 0.22, TILE_SIZE);
         const beamMesh = new THREE.InstancedMesh(beamGeo, beamMat, beamSpots.length);
@@ -1194,9 +1346,21 @@ export class MimicEngine {
       }
     }
 
-    // School Ceiling Fluorescents (Ch1: dead, violently flickering, & dim) vs Paper Lanterns (Ch2-4)
+    // School Ceiling Fluorescents (Ch1) vs Paper Lanterns (Ch2-8)
     const lanternColor =
-      chapterId === 4 ? 0xdc2626 : chapterId === 3 ? 0xdb2777 : 0xea580c;
+      chapterId === 8
+        ? 0xeab308
+        : chapterId === 4
+          ? 0xdc2626
+          : chapterId === 7
+            ? 0xf472b6
+            : chapterId === 6
+              ? 0xe11d48
+              : chapterId === 5
+                ? 0x0d9488
+                : chapterId === 3
+                  ? 0xdb2777
+                  : 0xea580c;
     map.lanterns.forEach((l, i) => {
       const pos = gridToWorld(l.gx, l.gz, map);
       if (chapterId === 1) {
@@ -1228,13 +1392,16 @@ export class MimicEngine {
       }
     });
 
-    // Desks (Ch1, some knocked tilted!) or Chabudai Tables (Ch2)
+    // Desks / Coastal Tables / Tokyo Street Barricades (F tiles)
     map.desks.forEach((d, i) => {
       const pos = gridToWorld(d.gx, d.gz, map);
-      const prop = chapterId === 2 ? createChabudaiTable() : createSchoolDesk();
+      const prop =
+        chapterId === 2 || chapterId === 5 || chapterId === 6 || chapterId === 7
+          ? createChabudaiTable()
+          : createSchoolDesk();
       prop.position.set(pos.x, 0, pos.z);
       prop.rotation.y = i % 2 === 0 ? 0.14 : -0.24;
-      if (chapterId === 1 && i % 4 === 2) {
+      if ((chapterId === 1 || chapterId === 8) && i % 4 === 2) {
         prop.rotation.z = 0.22;
       }
       this.worldGroup.add(prop);
@@ -1263,8 +1430,8 @@ export class MimicEngine {
       }
     });
 
-    // Hallway Bulletin Notice Boards (Ch1)
-    if (chapterId === 1) {
+    // Hallway Bulletin Notice Boards (Ch1 main map)
+    if (chapterId === 1 && !isChaseMap) {
       [
         { gx: 5, gz: 7 },
         { gx: 13, gz: 7 },
@@ -1308,7 +1475,7 @@ export class MimicEngine {
       this.worldGroup.add(web);
     });
 
-    // Sacred Cursed Trees (Ch3 Cherry Blossoms, Ch4 Twisted Shrine)
+    // Sacred Cursed Trees (Ch3 Cherry Blossoms, Ch5 Aogashima Coastal Pines, Ch7 Jigoku Dead Trees)
     map.sacredTrees.forEach((st) => {
       const pos = gridToWorld(st.gx, st.gz, map);
       const tree = createSacredTree(this.textures, chapterId === 3);
@@ -1325,9 +1492,19 @@ export class MimicEngine {
       this.lanterns.push({ light, baseIntensity: 0.65, phase: i * 1.4 });
     });
 
-    // Chapter-Specific Scare Props:
-    // Ch.2: Head-turning Cursed Dolls & Blood-stained Hospital Gurneys
-    if (chapterId === 2) {
+    // Book II Ch.1: Poisoned Well landmark for dipping rats
+    if (map.poisonWell) {
+      const wellWorld = gridToWorld(map.poisonWell.gx, map.poisonWell.gz, map);
+      const { group: wellGroup, light: wellLight } = createPoisonWellProp();
+      wellGroup.position.set(wellWorld.x, 0, wellWorld.z);
+      this.worldGroup.add(wellGroup);
+      this.poisonWellPos = { x: wellWorld.x, z: wellWorld.z };
+      this.poisonWellLight = wellLight;
+      this.lanterns.push({ light: wellLight, baseIntensity: 2.8, phase: 0.5 });
+    }
+
+    // Ch.2: Head-turning Cursed Dolls & Hospital Gurneys
+    if (chapterId === 2 && !isChaseMap) {
       [
         { gx: 9, gz: 8 },
         { gx: 13, gz: 8 },
@@ -1357,14 +1534,33 @@ export class MimicEngine {
       });
     }
 
-    // Ch.3 & Ch.4: Eerie Stone Jizo Statues watching from the Swamp Mist
-    if (chapterId === 3 || chapterId === 4) {
-      [
-        { gx: 7, gz: 5 },
-        { gx: 15, gz: 5 },
-        { gx: 7, gz: 16 },
-        { gx: 15, gz: 16 },
-      ].forEach((spot, idx) => {
+    // Ch.3, Ch.4, Ch.5, Ch.6 & Ch.7: Eerie Stone Jizo Statues watching from the Mist
+    if (!isChaseMap && (chapterId === 3 || chapterId === 4 || chapterId === 5 || chapterId === 6 || chapterId === 7)) {
+      const jizoSpots =
+        chapterId === 5
+          ? [
+              { gx: 5, gz: 5 },
+              { gx: 18, gz: 5 },
+              { gx: 5, gz: 19 },
+            ]
+          : chapterId === 6
+            ? [
+                { gx: 7, gz: 10 },
+                { gx: 15, gz: 10 },
+                { gx: 11, gz: 17 },
+              ]
+            : chapterId === 7
+              ? [
+                  { gx: 8, gz: 11 },
+                  { gx: 12, gz: 12 },
+                ]
+              : [
+                  { gx: 7, gz: 5 },
+                  { gx: 15, gz: 5 },
+                  { gx: 7, gz: 16 },
+                  { gx: 15, gz: 16 },
+                ];
+      jizoSpots.forEach((spot, idx) => {
         if (!isWall(spot.gx, spot.gz, map)) {
           const pos = gridToWorld(spot.gx, spot.gz, map);
           const jizo = createStoneJizoStatue();
@@ -1375,9 +1571,8 @@ export class MimicEngine {
       });
     }
 
-    // Ch.4: Giant Underground Cavern Props — Stalactites, Stalagmites, Crimson Crystals, Cocoons & Telegraph Ring
-    if (isBossFight) {
-      // Ceiling Stalactites & Perimeter Stalagmites
+    // Ch.4 ONLY: Giant Underground Cavern Props — Stalactites, Stalagmites, Crimson Crystals & Cocoons
+    if (chapterId === 4 && !isChaseMap) {
       for (let i = 0; i < map.walkableTiles.length; i += 11) {
         const wt = map.walkableTiles[i];
         const pos = gridToWorld(wt.gx, wt.gz, map);
@@ -1404,7 +1599,6 @@ export class MimicEngine {
         }
       });
 
-      // Glowing Crimson Cavern Crystal Clusters to rim-light the cave arena
       [
         { gx: 4, gz: 4 },
         { gx: 18, gz: 4 },
@@ -1433,7 +1627,10 @@ export class MimicEngine {
         this.worldGroup.add(cocoon);
         this.hangingCocoons.push({ group: cocoon, phase: i * 0.9 });
       }
+    }
 
+    // Boss Arena Telegraph Ring & Barrier Aura (Ch.4 Cave & Ch.8 Ruined Tokyo)
+    if (isBossFight) {
       this.telegraphRing = createTelegraphRing();
       this.worldGroup.add(this.telegraphRing);
 
@@ -1444,24 +1641,29 @@ export class MimicEngine {
     // Atmospheric Chapter Particles (Dust, Spirit Ash, Falling Sakura Petals, Blood Embers) & Layered Ground Mist
     this.buildAtmosphereParticles(chapterId, mapW, mapH);
 
-    // Exit Portal (Ch.1 = Steel Basement Door, Ch.2-3 = Crimson Torii Gate, Ch.4 = Sealed Cavern Entrance)
+    // Exit Portal (Ch.1 = Steel Basement Door, Ch.2+ = Crimson/Green Torii Gate)
     const exitWorld = gridToWorld(map.exitTile.gx, map.exitTile.gz, map);
     this.exitPos = exitWorld;
-    if (chapterId === 1) {
-      const doorRig = createBasementDoor(false);
+    if (chapterId === 1 && !isChaseMap) {
+      const doorRig = createBasementDoor(this.exitUnlocked);
       doorRig.group.position.set(exitWorld.x + 0.35, 0, exitWorld.z + 0.35);
       doorRig.group.rotation.y = -Math.PI * 0.75;
       this.worldGroup.add(doorRig.group);
       this.exitGateGroup = doorRig.group;
       this.basementDoorRig = doorRig;
     } else {
-      const exitGate = createToriiGate(isBossFight ? 1.08 : 0.92, isBossFight);
+      const exitGate = createToriiGate(isBossFight ? 1.08 : 0.94, isBossFight || this.exitUnlocked);
       exitGate.position.set(exitWorld.x, 0, exitWorld.z);
       this.worldGroup.add(exitGate);
       this.exitGateGroup = exitGate;
     }
 
-    const exitLight = new THREE.PointLight(0x991b1b, isBossFight ? 0.9 : 1.4, 8, 1.6);
+    const exitLight = new THREE.PointLight(
+      this.exitUnlocked ? 0x22c55e : 0x991b1b,
+      this.exitUnlocked ? 3.8 : isBossFight ? 0.9 : 1.4,
+      this.exitUnlocked ? 14 : 8,
+      1.6
+    );
     exitLight.position.set(exitWorld.x, 1.8, exitWorld.z);
     this.worldGroup.add(exitLight);
     this.exitPortalLight = exitLight;
@@ -1469,11 +1671,17 @@ export class MimicEngine {
     // Collectibles
     const chapterDiaries = DIARIES.filter((d) => d.chapterId === chapterId);
     let diaryIdx = 0;
+    let batterySeen = 0;
 
     map.items.forEach((item, i) => {
+      if (item.kind === 'battery') {
+        batterySeen++;
+        if (isNightmare && batterySeen % 2 === 0) return;
+      }
+
       const pos = gridToWorld(item.gx, item.gz, map);
       const mesh = createCollectibleMesh(item.kind, this.textures);
-      const baseY = item.kind === 'diary' ? 0.55 : 1.05;
+      const baseY = item.kind === 'rat' ? 0.24 : item.kind === 'diary' ? 0.55 : 1.05;
       mesh.position.set(pos.x, baseY, pos.z);
       this.worldGroup.add(mesh);
 
@@ -1482,11 +1690,13 @@ export class MimicEngine {
         const glowColor =
           item.kind === 'key'
             ? 0xf59e0b
-            : item.kind === 'butterfly'
-              ? 0xf472b6
-              : item.kind === 'ofuda' || item.kind === 'seal'
-                ? 0xef4444
-                : 0xd6d3d1;
+            : item.kind === 'rat'
+              ? 0xf97316
+              : item.kind === 'butterfly'
+                ? 0xf472b6
+                : item.kind === 'ofuda' || item.kind === 'seal'
+                  ? 0xef4444
+                  : 0xd6d3d1;
         light = new THREE.PointLight(glowColor, 1.1, 4.5, 2);
         light.position.set(pos.x, baseY + 0.25, pos.z);
         this.worldGroup.add(light);
@@ -1510,15 +1720,21 @@ export class MimicEngine {
         baseY,
       });
     });
+  }
 
-    // Monsters
-    const speedScale = difficulty === 'nightmare' ? 1.2 : 1.0;
-    meta.monsters.forEach((mId, i) => {
+  private spawnMonstersFromList(
+    monsterIds: MonsterId[],
+    map: ChapterMapData,
+    speedScale: number,
+    isBossFight: boolean,
+    isChaseSpawn: boolean
+  ) {
+    monsterIds.forEach((mId, i) => {
       const spawn = map.monsterSpawns[i % map.monsterSpawns.length] || { gx: 11, gz: 11 };
       const pos = gridToWorld(spawn.gx, spawn.gz, map);
       const rig = createMonsterRig(mId, this.textures);
-      if (isBossFight && mId === 'saigomo') {
-        rig.group.scale.setScalar(1.48);
+      if ((isBossFight || isChaseSpawn) && (mId === 'saigomo' || mId === 'enzukai')) {
+        rig.group.scale.setScalar(isChaseSpawn ? 1.28 : 1.48);
       }
       rig.group.position.set(pos.x, 0, pos.z);
       this.worldGroup.add(rig.group);
@@ -1527,25 +1743,37 @@ export class MimicEngine {
         map.walkableTiles[Math.floor(Math.random() * map.walkableTiles.length)];
 
       const baseSpeed =
-        mId === 'saigomo'
+        mId === 'saigomo' || mId === 'enzukai'
           ? 2.85
-          : mId === 'oomukade'
+          : mId === 'oomukade' || mId === 'nure'
             ? 2.45
-            : mId === 'keiko'
-              ? 2.3
-              : mId === 'megumi'
-                ? 2.15
-                : 1.95;
+            : mId === 'nagisa' || mId === 'jigoku_warden'
+              ? 2.4
+              : mId === 'kuishinbo' || mId === 'hyakume'
+                ? 2.35
+                : mId === 'keiko' || mId === 'senzai_fallen'
+                  ? 2.3
+                  : mId === 'rin_mio'
+                    ? 2.25
+                    : mId === 'megumi' || mId === 'kyogi'
+                      ? 2.15
+                      : 1.95;
       const chaseSpeed =
-        mId === 'saigomo'
+        mId === 'saigomo' || mId === 'enzukai'
           ? 4.45
-          : mId === 'oomukade'
+          : mId === 'oomukade' || mId === 'nure'
             ? 4.25
-            : mId === 'keiko'
-              ? 3.8
-              : mId === 'megumi'
-                ? 3.9
-                : 3.65;
+            : mId === 'nagisa' || mId === 'jigoku_warden'
+              ? 4.15
+              : mId === 'kuishinbo' || mId === 'hyakume'
+                ? 4.1
+                : mId === 'rin_mio' || mId === 'senzai_fallen'
+                  ? 3.95
+                  : mId === 'megumi'
+                    ? 3.9
+                    : mId === 'keiko' || mId === 'kyogi'
+                      ? 3.8
+                      : 3.65;
 
       this.monsters.push({
         id: mId,
@@ -1553,31 +1781,35 @@ export class MimicEngine {
         x: pos.x,
         z: pos.z,
         yaw: 0,
-        state: 'patrol',
+        state: isChaseSpawn ? 'chase' : 'patrol',
         targetGx: patrolPick.gx,
         targetGz: patrolPick.gz,
         baseSpeed: baseSpeed * speedScale,
         chaseSpeed: chaseSpeed * speedScale,
-        memoryTimer: 0,
+        memoryTimer: isChaseSpawn ? 999 : 0,
         pathRefreshTimer: 0,
-        stunTimer: 0,
+        stunTimer: isChaseSpawn ? 1.35 + i * 0.25 : 0,
       });
     });
-
-    // Place Player at Start
-    const startWorld = gridToWorld(map.playerStart.gx, map.playerStart.gz, map);
-    this.playerX = startWorld.x;
-    this.playerZ = startWorld.z;
-    this.yaw = isBossFight ? 0 : -Math.PI / 2;
-    this.pitch = 0;
-
-    soundEngine.startBgm(chapterId, isBossFight);
-    this.pushHudSnapshot(null, 99, null, false);
-    this.callbacks.onSubtitle(meta.subtitles.onStart);
   }
 
   public triggerInteract() {
     if (this.mode !== 'playing' || !this.mapData) return;
+
+    // 0. In Book II Ch.1: Check feeding poisoned rat to Rin & Mio (generous 4.2m range)
+    if (this.chapterId === 5 && !this.inChaseMap && this.carriedRat === 'poisoned') {
+      const rinMio = this.monsters.find((m) => m.id === 'rin_mio' && m.stunTimer <= 0);
+      if (rinMio && Math.hypot(rinMio.x - this.playerX, rinMio.z - this.playerZ) < 4.25) {
+        this.carriedRat = 'none';
+        rinMio.stunTimer = 5.5;
+        rinMio.state = 'patrol';
+        rinMio.memoryTimer = 0;
+        this.spawnShockwave(rinMio.x, rinMio.z, 2.8, 0x22c55e, 0.42);
+        soundEngine.playPoisonSplash();
+        this.advanceChapter5Feeding(false);
+        return;
+      }
+    }
 
     // 1. Check nearby collectibles
     let closestItem: CollectibleEntity | null = null;
@@ -1596,26 +1828,300 @@ export class MimicEngine {
       return;
     }
 
-    // 2. Check Exit Portal (Ch.1-3)
-    if (this.chapterId !== 4) {
+    // 2. Check Poisoned Well in Book II Ch.1
+    if (
+      this.chapterId === 5 &&
+      !this.inChaseMap &&
+      this.poisonWellPos &&
+      Math.hypot(this.poisonWellPos.x - this.playerX, this.poisonWellPos.z - this.playerZ) < 2.85
+    ) {
+      if (this.carriedRat === 'raw') {
+        this.carriedRat = 'poisoned';
+        soundEngine.playPoisonSplash();
+        this.spawnShockwave(this.poisonWellPos.x, this.poisonWellPos.z, 2.4, 0x22c55e, 0.4);
+        this.callbacks.onSystemNotice(
+          '☠️ 독이 든 우물에 쥐를 담갔습니다! 이제 미오와 린에게 다가가 [E]로 먹이세요!'
+        );
+      } else if (this.carriedRat === 'poisoned') {
+        this.callbacks.onSystemNotice('이미 독에 절여진 쥐를 들고 있습니다! 미오와 린에게 먹이세요.');
+      } else {
+        this.callbacks.onSystemNotice('독이 든 우물입니다. 먼저 섬에서 시궁쥐를 잡아오세요!');
+      }
+      return;
+    }
+
+    // 3. Check Exit Portal: Exploration/Boss unlocks -> enter Dedicated Chase Map; Chase Map exit -> Clear Chapter!
+    if (this.exitUnlocked) {
       const exitDist = Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ);
-      if (exitDist < 2.6 && this.exitUnlocked) {
-        soundEngine.stopBgm();
-        soundEngine.playPortalUnlock();
-        this.mode = 'paused';
-        this.releasePointerLock();
-        this.callbacks.onChapterClear(this.chapterId, this.elapsedSeconds);
+      if (exitDist < 2.75) {
+        if (!this.inChaseMap) {
+          this.enterDedicatedChaseMap();
+        } else {
+          this.completeChapterEscape();
+        }
       }
     }
   }
 
+  private advanceChapter5Feeding(fromDeveloper: boolean) {
+    this.ratsFedCount = Math.min(3, this.ratsFedCount + 1);
+    this.collectedItems = this.ratsFedCount;
+    const chapterMeta = CHAPTERS.find((c) => c.id === 5)!;
+    this.callbacks.onItemCollected(this.ratsFedCount, 3, 'rat_feed');
+
+    if (this.ratsFedCount === 1) {
+      this.callbacks.onSubtitle(chapterMeta.subtitles.onFirstItem);
+    } else if (this.ratsFedCount === 2) {
+      this.callbacks.onSubtitle(chapterMeta.subtitles.onHalfItem);
+    }
+
+    if (fromDeveloper) {
+      this.callbacks.onSystemNotice(
+        `시스템 지배! 전 괴물 12초 정지 및 미오와 린에게 독 쥐 먹이기 (${this.ratsFedCount}/3) 완료!`
+      );
+    } else if (this.ratsFedCount < 3) {
+      this.callbacks.onSystemNotice(
+        `🐀 미오와 린에게 독이 든 쥐를 먹였습니다! (${this.ratsFedCount}/3) — 5.5초간 고통에 몸부림칩니다.`
+      );
+    }
+
+    if (this.ratsFedCount >= 3 && !this.exitUnlocked) {
+      this.unlockExplorationExit();
+    }
+  }
+
+  private completeChapterEscape() {
+    if (this.mode !== 'playing') return;
+    soundEngine.stopBgm();
+    soundEngine.playPortalUnlock();
+    this.mode = 'paused';
+    this.releasePointerLock();
+    this.callbacks.onChapterClear(this.chapterId, this.elapsedSeconds);
+  }
+
+  private getFinalChaseSubtitle(chapterId: number): CutsceneLine {
+    switch (chapterId) {
+      case 1:
+        return {
+          speaker: '야스',
+          accent: '#ef4444',
+          text: '“지하실 문 안쪽 추격 통로가 열렸다! 시즈와 비와키가 미친 듯이 쫓아오니 출구까지 멈추지 말고 달려!”',
+        };
+      case 2:
+        return {
+          speaker: '킨토루 (사마)',
+          accent: '#ef4444',
+          text: '“도망칠 수 있을 것 같으냐! 황궁의 어두운 회랑 끝까지 메구미와 비와키가 네 숨통을 쫓는다!”',
+        };
+      case 3:
+        return {
+          speaker: '야스',
+          accent: '#ef4444',
+          text: '“벚꽃 늪 너머 추격 회랑이야! 오오무카데와 메구미의 추격을 뚫고 출구 도리이로 달려!”',
+        };
+      case 4:
+        return {
+          speaker: '사이고모 (단말마)',
+          accent: '#ef4444',
+          text: '“크아악…! 나 혼자 소멸할 순 없다! 붕괴하는 동굴 탈출구까지 끝까지 뒤쫓아가마!”',
+        };
+      case 5:
+        return {
+          speaker: '미오와 린',
+          accent: '#f472b6',
+          text: '“독을 먹인 대가를 치러라… 선착장 끝까지 우리가 직접 너를 찢어발겨 주마!!”',
+        };
+      case 6:
+        return {
+          speaker: '우치우미 센자이',
+          accent: '#f59e0b',
+          text: '“성역 회랑이 무너지고 있다… 나기사와 함께 깊은 바다 속으로 가라앉아라, 이사무!”',
+        };
+      case 7:
+        return {
+          speaker: '지옥의 인도자',
+          accent: '#f97316',
+          text: '“시니가미와 계약한 배신자여! 피의 강 탈출로가 닫히기 전에 절대 빠져나가지 못한다!”',
+        };
+      default:
+        return {
+          speaker: '엔즈카이 (질투의 짐승)',
+          accent: '#eab308',
+          text: '“백염 따위에 나 혼자 무너질 순 없다! 무너진 도쿄 고가도로 끝까지 쫓아가마!”',
+        };
+    }
+  }
+
+  private unlockExplorationExit() {
+    this.exitUnlocked = true;
+    soundEngine.playPortalUnlock();
+    const meta = CHAPTERS.find((c) => c.id === this.chapterId) || CHAPTERS[0];
+    this.callbacks.onSubtitle(meta.subtitles.onAllItems);
+
+    if (this.exitPortalLight) {
+      this.exitPortalLight.color.setHex(0x22c55e);
+      this.exitPortalLight.intensity = 3.8;
+      this.exitPortalLight.distance = 14;
+    }
+    if (this.basementDoorRig) {
+      this.basementDoorRig.lockMesh.visible = false;
+      this.basementDoorRig.statusLampMat.color.setHex(0x22c55e);
+      this.basementDoorRig.statusLampMat.emissive.setHex(0x16a34a);
+      this.basementDoorRig.windowMat.color.setHex(0x34d399);
+      this.basementDoorRig.windowMat.emissive.setHex(0x10b981);
+      this.basementDoorRig.windowMat.emissiveIntensity = 1.5;
+    } else if (this.exitGateGroup) {
+      this.exitGateGroup.scale.setScalar(1.08);
+    }
+
+    this.callbacks.onSystemNotice(
+      this.chapterId === 1
+        ? '🔓 지하실 문이 열렸습니다! 문 안으로 들어가 추격전을 돌파하세요!'
+        : this.chapterId === 5
+          ? '🔓 선착장 출구가 열렸습니다! 출구로 들어가 미오와 린의 추격을 따돌리세요!'
+          : '🔓 탈출 출구가 열렸습니다! 초록빛 도리이로 들어가 추격전을 돌파하세요!'
+    );
+  }
+
+  private unlockBossEscapeExit() {
+    if (!this.mapData) return;
+    this.exitUnlocked = true;
+    this.bossStunTimer = 0;
+    this.bossAttackWarning = null;
+    this.clearBossSpikeZones();
+    for (const p of this.bossProjectiles) {
+      this.worldGroup.remove(p.mesh);
+    }
+    this.bossProjectiles = [];
+    if (this.telegraphRing) this.telegraphRing.visible = false;
+    if (this.bossShieldAura) this.bossShieldAura.visible = false;
+
+    for (const m of this.monsters) {
+      m.stunTimer = 999;
+      m.rig.group.position.set(m.x, -0.35, m.z);
+    }
+
+    const southExit = gridToWorld(this.mapData.exitTile.gx, this.mapData.exitTile.gz, this.mapData);
+    const northExit = gridToWorld(11, 1, this.mapData);
+    const dSouth = Math.hypot(southExit.x - this.playerX, southExit.z - this.playerZ);
+    const dNorth = Math.hypot(northExit.x - this.playerX, northExit.z - this.playerZ);
+    const chosenExit = dNorth < dSouth ? northExit : southExit;
+    this.exitPos = chosenExit;
+
+    if (this.exitGateGroup) {
+      this.exitGateGroup.position.set(chosenExit.x, 0, chosenExit.z);
+      this.exitGateGroup.scale.setScalar(1.16);
+    }
+    if (this.exitPortalLight) {
+      this.exitPortalLight.position.set(chosenExit.x, 2.0, chosenExit.z);
+      this.exitPortalLight.color.setHex(0x22c55e);
+      this.exitPortalLight.intensity = 4.5;
+      this.exitPortalLight.distance = 16;
+    }
+
+    soundEngine.playBossExplosion(true);
+    soundEngine.playPortalUnlock();
+    this.cameraShakeTimer = 0.6;
+    this.cameraShakeStrength = 0.16;
+
+    this.callbacks.onSystemNotice(
+      this.chapterId === 8
+        ? '🔓 엔즈카이 격파! 초록빛 탈출 도리이로 들어가 도쿄 붕괴 추격전을 돌파하세요!'
+        : '🔓 사이고모 격파! 초록빛 탈출 도리이로 들어가 동굴 붕괴 추격전을 돌파하세요!'
+    );
+  }
+
+  private enterDedicatedChaseMap() {
+    if (this.inChaseMap) return;
+    this.clearWorld();
+
+    this.inChaseMap = true;
+    this.finalChaseActive = true;
+    this.finalChaseElapsed = 0;
+    this.finalChaseTremorTimer = 0.9;
+    this.exitUnlocked = true;
+    this.bossStunTimer = 0;
+    this.bossAttackWarning = null;
+    if (this.swordGroup) {
+      this.swordGroup.visible = false;
+    }
+
+    const chaseMap = parseChaseMap(this.chapterId);
+    this.mapData = chaseMap;
+
+    this.stamina = this.maxStamina;
+    this.exhausted = false;
+    this.battery = Math.max(this.battery, 70);
+    this.playerHp = Math.max(this.playerHp, 65);
+    this.invulnTimer = 1.2;
+
+    this.buildWorldFromMapData(chaseMap, true);
+
+    const meta = CHAPTERS.find((c) => c.id === this.chapterId) || CHAPTERS[0];
+    const isNightmare = this.difficulty === 'nightmare';
+    const chaseSpeedScale = isNightmare ? 1.32 : 1.04;
+
+    // Book II Ch.1 specifically has Mio & Rin chasing in the dedicated chase map!
+    let chaseMonsters: MonsterId[];
+    if (this.chapterId === 5) {
+      chaseMonsters = isNightmare ? ['rin_mio', 'rin_mio', 'rin_mio'] : ['rin_mio', 'rin_mio'];
+    } else {
+      chaseMonsters = [...meta.monsters];
+      if (isNightmare && meta.monsters.length > 0) {
+        chaseMonsters.push(meta.monsters[0]);
+      }
+    }
+    this.spawnMonstersFromList(chaseMonsters, chaseMap, chaseSpeedScale, false, true);
+
+    const startWorld = gridToWorld(chaseMap.playerStart.gx, chaseMap.playerStart.gz, chaseMap);
+    this.playerX = startWorld.x;
+    this.playerZ = startWorld.z;
+    this.yaw = -Math.PI / 2; // Face East directly toward the far escape gate
+    this.pitch = 0;
+
+    this.cameraShakeTimer = 0.65;
+    this.cameraShakeStrength = 0.14;
+
+    soundEngine.playPortalUnlock();
+    soundEngine.playFinalChaseAlarm();
+    soundEngine.startBgm(this.chapterId, false, true, isNightmare);
+
+    this.callbacks.onSubtitle(this.getFinalChaseSubtitle(this.chapterId));
+    this.callbacks.onSystemNotice(
+      this.chapterId === 5
+        ? '🚨 추격전 전용 맵 돌입! 미오와 린이 끝까지 쫓아옵니다 — 탈출구까지 전력 질주하세요!'
+        : '🚨 추격전 전용 맵 돌입! 뒤에서 몰려오는 마수들을 뿌리치고 출구까지 달리세요!'
+    );
+    this.pushHudSnapshot(null, 12, chaseMonsters[0] || null, true);
+  }
+
   private collectItemEntity(item: CollectibleEntity) {
+    if (item.kind === 'rat') {
+      if (this.carriedRat !== 'none') {
+        this.callbacks.onSystemNotice(
+          this.carriedRat === 'raw'
+            ? '이미 쥐를 들고 있습니다! 먼저 [독이 든 우물]에 담그세요.'
+            : '이미 독 쥐를 들고 있습니다! 미오와 린에게 다가가 [E]로 먹이세요.'
+        );
+        return;
+      }
+      item.collected = true;
+      item.mesh.visible = false;
+      if (item.light) item.light.intensity = 0;
+      this.carriedRat = 'raw';
+      soundEngine.playPickup('key');
+      this.callbacks.onSystemNotice(
+        '🐀 쥐를 잡았습니다! 섬 중앙의 [독이 든 우물]로 가져가 [E]로 독을 묻히세요!'
+      );
+      return;
+    }
+
     item.collected = true;
     item.mesh.visible = false;
     if (item.light) item.light.intensity = 0;
 
     if (item.kind === 'battery') {
-      this.battery = Math.min(100, this.battery + 45);
+      this.battery = Math.min(100, this.battery + (this.difficulty === 'nightmare' ? 35 : 45));
       soundEngine.playPickup('battery');
     } else if (item.kind === 'diary') {
       soundEngine.playPickup('diary');
@@ -1644,23 +2150,7 @@ export class MimicEngine {
         this.callbacks.onSubtitle(chapterMeta.subtitles.onHalfItem);
       }
       if (this.collectedItems >= this.requiredItems && !this.exitUnlocked) {
-        this.exitUnlocked = true;
-        soundEngine.playPortalUnlock();
-        if (this.exitPortalLight) {
-          this.exitPortalLight.color.setHex(0x22c55e);
-          this.exitPortalLight.intensity = 2.8;
-        }
-        if (this.basementDoorRig) {
-          this.basementDoorRig.lockMesh.visible = false;
-          this.basementDoorRig.statusLampMat.color.setHex(0x22c55e);
-          this.basementDoorRig.statusLampMat.emissive.setHex(0x16a34a);
-          this.basementDoorRig.windowMat.color.setHex(0x34d399);
-          this.basementDoorRig.windowMat.emissive.setHex(0x10b981);
-          this.basementDoorRig.windowMat.emissiveIntensity = 1.35;
-        } else if (this.exitGateGroup) {
-          this.exitGateGroup.scale.setScalar(1.02);
-        }
-        this.callbacks.onSubtitle(chapterMeta.subtitles.onAllItems);
+        this.unlockExplorationExit();
       }
     }
   }
@@ -1756,13 +2246,16 @@ export class MimicEngine {
     if (!this.kintoruControlActive) return;
     this.kintoruControlActive = false;
     this.callbacks.onKintoruControlChange?.(false);
-    this.kintoruNextTimer =
-      (this.chapterId === 4 ? 25 : 21) + Math.random() * 10;
+    const isBoss = this.isBossChapter() && !this.inChaseMap;
+    const isBook2 = this.chapterId >= 5;
+    const curseName = isBook2 ? '엔즈카이의 질투' : '킨토루의 지배';
+    const isNightmare = this.difficulty === 'nightmare';
+    this.kintoruNextTimer = (isNightmare ? 14 : isBoss ? 25 : 21) + Math.random() * 8;
 
     if (survived) {
       this.invulnTimer = Math.max(this.invulnTimer, 2.0);
       soundEngine.playKintoruControlEscape();
-      this.callbacks.onSystemNotice('⚡ 킨토루의 지배에서 벗어났습니다! (6초 버티기 성공)');
+      this.callbacks.onSystemNotice(`⚡ ${curseName}에서 벗어났습니다! (6초 버티기 성공)`);
       return;
     }
 
@@ -1771,8 +2264,8 @@ export class MimicEngine {
       soundEngine.playPortalUnlock();
       this.callbacks.onSystemNotice(
         this.jobId === 'hacker'
-          ? '방화벽 가동! 킨토루의 정신 해킹을 역추적해 차단했습니다!'
-          : '관리자 권한! 킨토루의 정신 지배를 강제로 끊어냈습니다!'
+          ? `방화벽 가동! ${curseName} 해킹을 역추적해 차단했습니다!`
+          : `관리자 권한! ${curseName}를 강제로 끊어냈습니다!`
       );
       return;
     }
@@ -1781,15 +2274,29 @@ export class MimicEngine {
       this.doctorReviveReady = false;
       this.invulnTimer = 3.2;
       soundEngine.playPortalUnlock();
-      this.callbacks.onSystemNotice('의사의 응급 처치! 킨토루의 정신 침식을 1회 이겨냈습니다!');
+      this.callbacks.onSystemNotice(`의사의 응급 처치! ${curseName} 침식을 1회 이겨냈습니다!`);
       return;
     }
 
-    if (this.chapterId === 4) {
-      this.callbacks.onSystemNotice('💀 킨토루의 손아귀에 정신이 잠식당했습니다! (-45 HP)');
-      this.applyPlayerDamage(45, 'saigomo');
+    if (isBoss) {
+      const bossId = this.getBossId();
+      this.callbacks.onSystemNotice(
+        isBook2
+          ? '💀 엔즈카이의 질투에 정신이 잠식당했습니다! (-45 HP)'
+          : '💀 킨토루의 손아귀에 정신이 잠식당했습니다! (-45 HP)'
+      );
+      this.applyPlayerDamage(45, bossId);
     } else {
-      const killerId: MonsterId = this.chapterId === 2 ? 'megumi' : 'oomukade';
+      const killerId: MonsterId =
+        this.chapterId === 2
+          ? 'megumi'
+          : this.chapterId === 3
+            ? 'oomukade'
+            : this.chapterId === 6
+              ? 'nagisa'
+              : this.chapterId === 7
+                ? 'jigoku_warden'
+                : 'nure';
       const killer =
         this.monsters.find((m) => m.id === killerId) || this.monsters[0];
       if (killer) {
@@ -1801,7 +2308,7 @@ export class MimicEngine {
   private updatePlaying(dt: number, elapsed: number) {
     if (!this.mapData) return;
 
-    // During Kintoru Mind-Control QTE (Ch.2+), freeze movement & monsters while keeping trembling atmosphere alive
+    // During Mind-Control QTE (Ch.2-4, Ch.6-8), freeze movement & monsters while keeping trembling atmosphere alive
     if (this.kintoruControlActive) {
       this.animateAtmosphereParticles(dt, elapsed, this.chapterId);
       const tremorX = Math.sin(elapsed * 42) * 0.025;
@@ -1817,7 +2324,12 @@ export class MimicEngine {
       return;
     }
 
-    if (this.chapterId >= 2 && !(this.chapterId === 4 && this.bossStunTimer > 0)) {
+    const isNightmare = this.difficulty === 'nightmare';
+    const hasMindControlQte =
+      !this.inChaseMap &&
+      !this.finalChaseActive &&
+      (isNightmare || (this.chapterId >= 2 && this.chapterId <= 4) || this.chapterId >= 6);
+    if (hasMindControlQte && !(this.isBossChapter() && !this.inChaseMap && this.bossStunTimer > 0)) {
       this.kintoruNextTimer -= dt;
       if (this.kintoruNextTimer <= 0) {
         this.triggerKintoruControl();
@@ -1863,10 +2375,11 @@ export class MimicEngine {
       this.stamina = this.maxStamina;
       this.exhausted = false;
     } else if (wantsSprint) {
-      this.stamina = Math.max(0, this.stamina - 24 * dt);
+      const sprintDrain = isNightmare ? 29 : 24;
+      this.stamina = Math.max(0, this.stamina - sprintDrain * dt);
       if (this.stamina <= 1) this.exhausted = true;
     } else {
-      const regenMult = this.jobId === 'student' ? 1.35 : 1.0;
+      const regenMult = this.jobId === 'student' ? 1.35 : isNightmare ? 0.85 : 1.0;
       this.stamina = Math.min(
         this.maxStamina,
         this.stamina + (isMoving ? 10 : 18) * regenMult * dt
@@ -1947,8 +2460,8 @@ export class MimicEngine {
       this.camera.updateProjectionMatrix();
     }
 
-    // Flashlight & Battery (Job-aware)
-    const baseDrain = this.difficulty === 'nightmare' ? 2.4 : 1.55;
+    // Flashlight & Battery (Job & Nightmare aware)
+    const baseDrain = isNightmare ? 3.2 : 1.55;
     const drainMult =
       isGodJob
         ? 0
@@ -1964,7 +2477,7 @@ export class MimicEngine {
         soundEngine.playFlashlightToggle();
       }
     } else if (this.battery < 20) {
-      this.battery = Math.min(20, this.battery + 1.4 * dt);
+      this.battery = Math.min(20, this.battery + (isNightmare ? 0.9 : 1.4) * dt);
     }
 
     this.playerFillLight.position.set(this.playerX, this.eyeHeight, this.playerZ);
@@ -1980,7 +2493,7 @@ export class MimicEngine {
     // Animate collectibles, lanterns, head-turning dolls, swaying cocoons & drifting particles
     for (const item of this.collectibles) {
       if (item.collected) continue;
-      item.mesh.rotation.y = elapsed * 1.6;
+      item.mesh.rotation.y = elapsed * (item.kind === 'rat' ? 2.4 : 1.6);
       item.mesh.position.y = item.baseY + Math.sin(elapsed * 2.5 + item.x) * 0.08;
     }
     this.lanterns.forEach((l) => {
@@ -2013,7 +2526,7 @@ export class MimicEngine {
     }
 
     // Smoothly swing Ch.1 Basement Door ajar when unlocked
-    if (this.basementDoorRig && this.exitUnlocked) {
+    if (this.basementDoorRig && this.exitUnlocked && !this.inChaseMap) {
       this.basementDoorRig.doorPivot.rotation.y = THREE.MathUtils.damp(
         this.basementDoorRig.doorPivot.rotation.y,
         -0.68,
@@ -2025,17 +2538,45 @@ export class MimicEngine {
     // Animate per-particle dust / sakura petals / embers & drifting ground fog wisps
     this.animateAtmosphereParticles(dt, elapsed, this.chapterId);
 
-    // Every 5 seconds, silently rearrange out-of-sight interior maze corridors (Ch.1-3)
-    if (this.chapterId !== 4) {
+    // Silently rearrange out-of-sight interior maze corridors (Exploration maps only)
+    const shiftInterval = isNightmare ? 3.0 : 5.0;
+    if (!this.isBossChapter() && !this.inChaseMap) {
       this.mapShiftTimer += dt;
-      if (this.mapShiftTimer >= 5.0) {
-        this.mapShiftTimer -= 5.0;
+      if (this.mapShiftTimer >= shiftInterval) {
+        this.mapShiftTimer -= shiftInterval;
         this.silentlyShiftMaze();
       }
     }
 
-    // Update Monsters / Chapter 4 Cave Boss Combat
-    const MAX_AGGRO_RANGE = 12.0;
+    // Check entering unlocked exit -> warps into Dedicated Chase Map!
+    if (!this.inChaseMap && this.exitUnlocked) {
+      const exitDist = Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ);
+      if (exitDist < 1.95) {
+        this.enterDedicatedChaseMap();
+        return;
+      }
+    }
+
+    // On Dedicated Chase Map: track tremors & complete chapter upon reaching the escape gate
+    if (this.inChaseMap) {
+      this.finalChaseElapsed += dt;
+      this.finalChaseTremorTimer -= dt;
+      if (this.finalChaseTremorTimer <= 0) {
+        this.finalChaseTremorTimer = isNightmare ? 1.5 : 2.1;
+        this.cameraShakeTimer = 0.24;
+        this.cameraShakeStrength = isNightmare ? 0.12 : 0.09;
+        if (this.isBossChapter()) {
+          soundEngine.playBossExplosion(false);
+        }
+      }
+      if (Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ) < 2.25) {
+        this.completeChapterEscape();
+        return;
+      }
+    }
+
+    // Update Monsters / Chapter 4 & 8 Boss Combat
+    const MAX_AGGRO_RANGE = isNightmare ? 15.5 : 12.0;
     const playerGrid = worldToGrid(this.playerX, this.playerZ, this.mapData);
     let minMonsterDist = 999;
     let closestMonsterId: MonsterId | null = null;
@@ -2043,13 +2584,13 @@ export class MimicEngine {
 
     const baseDetection = this.flashlightOn
       ? sprinting
-        ? 12.0
-        : 11.2
+        ? MAX_AGGRO_RANGE
+        : MAX_AGGRO_RANGE * 0.93
       : this.crouching
-        ? 5.8
+        ? MAX_AGGRO_RANGE * 0.48
         : sprinting
-          ? 11.0
-          : 8.6;
+          ? MAX_AGGRO_RANGE * 0.92
+          : MAX_AGGRO_RANGE * 0.72;
     const stealthMult =
       isGodJob && this.skillActiveTimer > 0
         ? 0.0
@@ -2060,18 +2601,21 @@ export class MimicEngine {
             : 1.0;
     const detectionRange = Math.min(MAX_AGGRO_RANGE, baseDetection * stealthMult);
 
-    if (this.chapterId === 4) {
+    if (this.isBossChapter() && !this.inChaseMap) {
       this.updateSwordViewModel(dt, elapsed, isMoving);
-      const bossDead = this.updateChapter4BossFight(dt, elapsed, isGodJob);
-      if (bossDead || this.mode !== 'playing') return;
+      if (!this.exitUnlocked) {
+        const bossDead = this.updateBossFight(dt, elapsed, isGodJob);
+        if (bossDead || this.mode !== 'playing') return;
+      }
 
+      const bossId = this.getBossId();
       for (const m of this.monsters) {
         const d = Math.hypot(this.playerX - m.x, this.playerZ - m.z);
         if (d < minMonsterDist) {
           minMonsterDist = d;
           closestMonsterId = m.id;
         }
-        if (m.id === 'saigomo' && this.bossStunTimer <= 0) anyChasing = true;
+        if (!this.exitUnlocked && m.id === bossId && this.bossStunTimer <= 0) anyChasing = true;
       }
     } else {
       for (const m of this.monsters) {
@@ -2087,8 +2631,17 @@ export class MimicEngine {
           continue;
         }
 
+        // In Ch.5, if carrying a poisoned rat near rin_mio (< 1.55m), give player room to feed [E] without cheap instant death unless they walk straight into body (< 0.85m)
+        const catchRadius =
+          this.chapterId === 5 &&
+          !this.inChaseMap &&
+          m.id === 'rin_mio' &&
+          this.carriedRat === 'poisoned'
+            ? 0.85
+            : 1.18;
+
         // Check Catch -> Developer/Hacker God Shield, Doctor Second Chance, or Jumpscare!
-        if (distToPlayer < 1.18 && this.invulnTimer <= 0) {
+        if (distToPlayer < catchRadius && this.invulnTimer <= 0) {
           if (isGodJob) {
             this.invulnTimer = 1.6;
             m.stunTimer = isHacker ? 7.0 : 5.0;
@@ -2123,8 +2676,12 @@ export class MimicEngine {
           distToPlayer <= detectionRange &&
           hasLineOfSight(m.x, m.z, this.playerX, this.playerZ, this.mapData);
 
-        // Immediately stop chasing if player leaves 12m attack/aggro range
-        if (m.state === 'chase' && distToPlayer > MAX_AGGRO_RANGE) {
+        if (this.inChaseMap && !(isGodJob && this.skillActiveTimer > 0)) {
+          m.state = 'chase';
+          m.memoryTimer = 999;
+          m.targetGx = playerGrid.gx;
+          m.targetGz = playerGrid.gz;
+        } else if (m.state === 'chase' && distToPlayer > MAX_AGGRO_RANGE) {
           m.state = 'patrol';
           m.memoryTimer = 0;
           const pick =
@@ -2135,7 +2692,7 @@ export class MimicEngine {
           m.targetGz = pick.gz;
         } else if (seesPlayer) {
           m.state = 'chase';
-          m.memoryTimer = 4.2;
+          m.memoryTimer = isNightmare ? 6.0 : 4.2;
           m.targetGx = playerGrid.gx;
           m.targetGz = playerGrid.gz;
         } else if (m.state === 'chase') {
@@ -2177,7 +2734,23 @@ export class MimicEngine {
         const dx = steerX - m.x;
         const dz = steerZ - m.z;
         const len = Math.hypot(dx, dz);
-        const spd = m.state === 'chase' ? m.chaseSpeed : m.baseSpeed;
+        const finalChaseCap = isNightmare ? 5.12 : 4.68;
+        let spd =
+          m.state === 'chase'
+            ? this.inChaseMap
+              ? Math.min(finalChaseCap, m.chaseSpeed * 1.1)
+              : m.chaseSpeed
+            : m.baseSpeed;
+        if (
+          this.chapterId === 5 &&
+          !this.inChaseMap &&
+          m.id === 'rin_mio' &&
+          this.carriedRat === 'poisoned' &&
+          distToPlayer < 4.5
+        ) {
+          spd *= 0.65;
+        }
+
         if (len > 0.04) {
           m.x += (dx / len) * spd * dt;
           m.z += (dz / len) * spd * dt;
@@ -2194,27 +2767,32 @@ export class MimicEngine {
       }
     }
 
-    // Flashlight flicker when low battery or monster nearby (Developer/Hacker never flicker)
+    // Flashlight flicker when low battery or monster nearby (more intense in Nightmare; Developer/Hacker never flicker)
     if (this.flashlightOn) {
       let flicker = 1;
-      if (!isGodJob && (this.battery < 18 || minMonsterDist < 8.5)) {
-        flicker = Math.sin(elapsed * 37) > -0.6 ? 1 : 0.38;
+      const lowBatThresh = isNightmare ? 35 : 18;
+      const proxThresh = isNightmare ? 11.5 : 8.5;
+      if (!isGodJob && (this.battery < lowBatThresh || minMonsterDist < proxThresh)) {
+        flicker = Math.sin(elapsed * 37) > (isNightmare ? -0.35 : -0.6) ? 1 : 0.32;
       }
-      const baseBeam = isGodJob ? 36.0 : this.jobId === 'police' ? 28.0 : 22.0;
+      const baseBeam = isGodJob
+        ? 36.0
+        : (this.jobId === 'police' ? 28.0 : 22.0) * (isNightmare ? 0.8 : 1.0);
       this.flashlight.intensity = baseBeam * flicker;
       if (!isGodJob) {
-        this.playerFillLight.intensity = (this.chapterId === 4 ? 0.55 : 0.42) * flicker;
+        this.playerFillLight.intensity =
+          (isNightmare ? 0.25 : this.isBossChapter() && !this.inChaseMap ? 0.55 : 0.42) * flicker;
       }
     } else {
       this.flashlight.intensity = 0;
       if (!isGodJob) {
-        this.playerFillLight.intensity = this.chapterId === 4 ? 0.22 : 0.14;
+        this.playerFillLight.intensity = isNightmare ? 0.09 : this.isBossChapter() ? 0.22 : 0.14;
       }
     }
 
-    // Story Subtitle triggers for chase start & 12m escape (Ch.1-3)
+    // Story Subtitle triggers for chase start & escape (Exploration maps before entering chase map)
     const chapterMeta = CHAPTERS.find((c) => c.id === this.chapterId) || CHAPTERS[0];
-    if (this.chapterId !== 4) {
+    if (!this.isBossChapter() && !this.inChaseMap) {
       if (anyChasing && !this.hasTriggeredFirstChase) {
         this.hasTriggeredFirstChase = true;
         this.callbacks.onSubtitle(chapterMeta.subtitles.onFirstChase);
@@ -2229,34 +2807,68 @@ export class MimicEngine {
 
     // Check interactable prompt
     let prompt: string | null = null;
-    for (const item of this.collectibles) {
-      if (item.collected) continue;
-      if (Math.hypot(item.x - this.playerX, item.z - this.playerZ) < 2.35) {
-        prompt =
-          item.kind === 'battery'
-            ? '[E] 손전등 건전지 획득'
-            : item.kind === 'diary'
-              ? '[E] 남겨진 기록 읽기'
-              : item.kind === 'key'
-                ? '[E] 교실 열쇠 획득'
-                : item.kind === 'ofuda'
-                  ? '[E] 조상의 기억 부적 획득'
-                  : item.kind === 'butterfly'
-                    ? '[E] 나비 영혼 등불 바치기'
-                    : '[E] 축복받은 검의 인장 획득';
-        break;
+    if (this.chapterId === 5 && !this.inChaseMap && this.carriedRat === 'poisoned') {
+      const rinMio = this.monsters.find((m) => m.id === 'rin_mio' && m.stunTimer <= 0);
+      if (rinMio && Math.hypot(rinMio.x - this.playerX, rinMio.z - this.playerZ) < 4.25) {
+        prompt = `[E] 미오와 린에게 독 쥐 먹이기 (${this.ratsFedCount}/3)`;
+      }
+    }
+    if (!prompt) {
+      for (const item of this.collectibles) {
+        if (item.collected) continue;
+        if (Math.hypot(item.x - this.playerX, item.z - this.playerZ) < 2.35) {
+          prompt =
+            item.kind === 'battery'
+              ? '[E] 손전등 건전지 획득'
+              : item.kind === 'diary'
+                ? '[E] 남겨진 기록 읽기'
+                : item.kind === 'rat'
+                  ? '[E] 시궁쥐 잡기'
+                  : item.kind === 'key'
+                    ? '[E] 교실 열쇠 획득'
+                    : item.kind === 'ofuda'
+                      ? this.chapterId >= 5
+                        ? '[E] 심해 성역 부적 획득'
+                        : '[E] 조상의 기억 부적 획득'
+                      : item.kind === 'butterfly'
+                        ? this.chapterId >= 5
+                          ? '[E] 영혼의 등불 밝히기'
+                          : '[E] 나비 영혼 등불 바치기'
+                        : this.chapterId >= 5
+                          ? '[E] 백염의 성검 인장 획득'
+                          : '[E] 축복받은 검의 인장 획득';
+          break;
+        }
       }
     }
     if (
-      this.chapterId !== 4 &&
       !prompt &&
-      Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ) < 2.6
+      this.chapterId === 5 &&
+      !this.inChaseMap &&
+      this.poisonWellPos &&
+      Math.hypot(this.poisonWellPos.x - this.playerX, this.poisonWellPos.z - this.playerZ) < 2.85
+    ) {
+      prompt =
+        this.carriedRat === 'raw'
+          ? '[E] 독이 든 우물에 쥐 담그기'
+          : this.carriedRat === 'poisoned'
+            ? '독 쥐 보유 중 · 미오와 린에게 먹이세요'
+            : '독이 든 우물 (먼저 섬에서 쥐를 잡으세요)';
+    }
+    if (
+      (!this.isBossChapter() || this.exitUnlocked || this.inChaseMap) &&
+      !prompt &&
+      Math.hypot(this.exitPos.x - this.playerX, this.exitPos.z - this.playerZ) < 2.75
     ) {
       prompt = this.exitUnlocked
-        ? this.chapterId === 1
-          ? '[E] 지하실 문으로 탈출'
-          : '[E] 붉은 도리이 너머로 탈출'
-        : `봉인됨 (${this.collectedItems}/${this.requiredItems} 수집 필요)`;
+        ? this.inChaseMap
+          ? '[E] 추격전 최종 탈출!'
+          : this.chapterId === 1
+            ? '[E] 지하실 문으로 들어가 추격전 시작'
+            : '[E] 출구로 들어가 추격전 시작'
+        : this.chapterId === 5
+          ? `봉인됨 (독 쥐 먹이기 ${this.ratsFedCount}/3 필요)`
+          : `봉인됨 (${this.collectedItems}/${this.requiredItems} 수집 필요)`;
     }
 
     this.hudTimer += dt;
@@ -2316,18 +2928,36 @@ export class MimicEngine {
     const fwdZ = -Math.cos(this.yaw);
     const isHacker = this.jobId === 'hacker';
     const isDev = this.jobId === 'developer';
+    const bossId = this.getBossId();
+    const minionId = this.getBossMinionId();
+    const bossName = bossId === 'enzukai' ? '엔즈카이' : '사이고모';
+    const barrierName = bossId === 'enzukai' ? '질투의 결계' : '제어의 결계';
 
     for (const m of this.monsters) {
       const dx = m.x - this.playerX;
       const dz = m.z - this.playerZ;
       const dist = Math.hypot(dx, dz);
-      const reach = m.id === 'saigomo' ? 4.0 : 3.1;
+      const reach = m.id === bossId ? 4.0 : 3.1;
       if (dist > reach) continue;
 
       const dot = (dx * fwdX + dz * fwdZ) / Math.max(0.01, dist);
       if (dot < 0.28) continue;
 
-      if (m.id === 'saigomo') {
+      if (m.id === bossId) {
+        if (this.finalChaseActive) {
+          m.stunTimer = 1.3;
+          soundEngine.playSwordHit(true);
+          this.spawnShockwave(m.x, m.z, 2.5, 0xf59e0b, 0.3);
+          const pushX = m.x + (dx / Math.max(0.1, dist)) * 1.1;
+          const pushZ = m.z + (dz / Math.max(0.1, dist)) * 1.1;
+          if (this.canOccupy(pushX, pushZ, 0.6)) {
+            m.x = pushX;
+            m.z = pushZ;
+          }
+          this.callbacks.onSystemNotice(`⚡ 일격 반격! ${bossName}의 원념을 1.3초간 저지했습니다!`);
+          return;
+        }
+
         const isStunned = this.bossStunTimer > 0;
 
         if (isStunned) {
@@ -2347,33 +2977,38 @@ export class MimicEngine {
           return;
         }
 
-        // Not stunned yet: parry during windup to break barrier -> 3s Stun! Otherwise deflected!
+        // Not stunned yet: parry during windup to break barrier -> Stun! Otherwise deflected!
         if (this.bossState === 'windup') {
           this.clearBossSpikeZones();
           this.spawnShockwave(m.x, m.z, 4.2, 0xfef08a, 0.42);
           soundEngine.playParryCounter();
           this.cameraShakeTimer = 0.22;
           this.cameraShakeStrength = 0.08;
-          this.stunSaigomo(3.0, '⚡ 패링 반격! 제어의 결계를 부수고 사이고모를 3초간 스턴시켰습니다!');
+          const stunSec = this.difficulty === 'nightmare' ? 2.4 : 3.0;
+          this.stunBoss(stunSec, `⚡ 패링 반격! ${barrierName}를 부수고 ${bossName}를 ${stunSec}초간 스턴시켰습니다!`);
           return;
         }
 
         soundEngine.playBarrierDeflect();
-        this.spawnShockwave(m.x, m.z, 2.4, 0xdc2626, 0.25);
+        this.spawnShockwave(m.x, m.z, 2.4, bossId === 'enzukai' ? 0xeab308 : 0xdc2626, 0.25);
         this.callbacks.onSystemNotice(
           '🛡️ 결계 방어! 스턴 상태일 때만 베어 피해를 줄 수 있습니다 (돌진 기둥 충돌 / 공격 준비 중 패링 / 오의 후 과부하)'
         );
         return;
-      } else if (m.id === 'keiko') {
+      } else if (m.id === minionId) {
         m.stunTimer = 8.0;
         soundEngine.playSwordHit(true);
-        this.callbacks.onSystemNotice('축복받은 검으로 어머니 케이코의 폭주를 8초간 잠재웠습니다.');
+        this.callbacks.onSystemNotice(
+          minionId === 'senzai_fallen'
+            ? '백염의 성검으로 타락한 형 센자이의 저주를 8초간 잠재웠습니다!'
+            : '축복받은 검으로 어머니 케이코의 폭주를 8초간 잠재웠습니다.'
+        );
         return;
       }
     }
   }
 
-  private stunSaigomo(seconds: number, notice: string) {
+  private stunBoss(seconds: number, notice: string) {
     this.bossStunTimer = Math.max(this.bossStunTimer, seconds);
     this.bossState = 'stunned';
     this.bossStateTimer = this.bossStunTimer;
@@ -2386,32 +3021,27 @@ export class MimicEngine {
   }
 
   private damageBoss(amount: number) {
-    if (this.bossStunTimer <= 0) return;
+    if (this.bossStunTimer <= 0 || this.exitUnlocked) return;
     this.bossHp = Math.max(0, this.bossHp - amount);
     if (this.bossHp === 0) {
-      soundEngine.stopBgm();
-      soundEngine.playPortalUnlock();
-      this.clearBossSpikeZones();
-      if (this.telegraphRing) this.telegraphRing.visible = false;
-      if (this.bossShieldAura) this.bossShieldAura.visible = false;
-      this.mode = 'paused';
-      this.releasePointerLock();
-      this.callbacks.onChapterClear(this.chapterId, this.elapsedSeconds);
+      this.unlockBossEscapeExit();
     }
   }
 
   private applyPlayerDamage(amount: number, attackerId: MonsterId) {
     if (this.invulnTimer > 0) return;
+    const bossId = this.getBossId();
+    const bossName = bossId === 'enzukai' ? '엔즈카이' : '사이고모';
 
     if (this.jobId === 'developer' || this.jobId === 'hacker') {
       this.invulnTimer = 1.2;
-      const boss = this.monsters.find((m) => m.id === 'saigomo');
+      const boss = this.monsters.find((m) => m.id === bossId);
       if (boss) {
-        this.stunSaigomo(
+        this.stunBoss(
           3.0,
           this.jobId === 'hacker'
-            ? '해커 방화벽 반사! 보스의 공격을 역해킹해 사이고모를 3초간 스턴시켰습니다!'
-            : '관리자 무적 실드! 공격을 반사해 사이고모를 3초간 스턴시켰습니다!'
+            ? `해커 방화벽 반사! 보스의 공격을 역해킹해 ${bossName}를 3초간 스턴시켰습니다!`
+            : `관리자 무적 실드! 공격을 반사해 ${bossName}를 3초간 스턴시켰습니다!`
         );
       }
       return;
@@ -2440,10 +3070,16 @@ export class MimicEngine {
     }
   }
 
-  private updateChapter4BossFight(dt: number, elapsed: number, _isDeveloper: boolean): boolean {
+  private updateBossFight(dt: number, elapsed: number, _isDeveloper: boolean): boolean {
     if (!this.mapData) return false;
-    const boss = this.monsters.find((m) => m.id === 'saigomo');
-    const keiko = this.monsters.find((m) => m.id === 'keiko');
+    const bossId = this.getBossId();
+    const minionId = this.getBossMinionId();
+    const isEnzukai = bossId === 'enzukai';
+    const bossName = isEnzukai ? '엔즈카이' : '사이고모';
+    const bossBarrier = isEnzukai ? '엔즈카이의 질투의 결계' : '사이고모의 제어의 결계';
+    const bossWaveColor = isEnzukai ? 0xeab308 : 0xdc2626;
+    const boss = this.monsters.find((m) => m.id === bossId);
+    const minion = this.monsters.find((m) => m.id === minionId);
 
     // Update expanding shockwave VFX
     for (let i = this.bossShockwaves.length - 1; i >= 0; i--) {
@@ -2462,7 +3098,7 @@ export class MimicEngine {
       }
     }
 
-    // Update Crimson Spike Eruption Zones
+    // Update Spike Eruption Zones
     for (let i = this.bossSpikeZones.length - 1; i >= 0; i--) {
       const sz = this.bossSpikeZones[i];
       sz.age += dt;
@@ -2495,18 +3131,18 @@ export class MimicEngine {
       if (hitPlayer) {
         this.worldGroup.remove(p.mesh);
         this.bossProjectiles.splice(i, 1);
-        this.applyPlayerDamage(this.difficulty === 'nightmare' ? 28 : 22, 'saigomo');
+        this.applyPlayerDamage(this.difficulty === 'nightmare' ? 28 : 22, bossId);
         if (this.mode !== 'playing') return true;
         continue;
       }
       if (p.life <= 0 || isWall(grid.gx, grid.gz, this.mapData)) {
-        this.spawnShockwave(p.x, p.z, 1.4, 0xdc2626, 0.25);
+        this.spawnShockwave(p.x, p.z, 1.4, bossWaveColor, 0.25);
         this.worldGroup.remove(p.mesh);
         this.bossProjectiles.splice(i, 1);
       }
     }
 
-    // Update Saigomo Boss AI
+    // Update Boss AI (Saigomo or Enzukai)
     if (boss) {
       const dx = this.playerX - boss.x;
       const dz = this.playerZ - boss.z;
@@ -2526,12 +3162,12 @@ export class MimicEngine {
         if (this.telegraphRing) this.telegraphRing.visible = false;
         boss.rig.group.position.set(boss.x, -0.22, boss.z);
         boss.rig.group.rotation.z = Math.sin(elapsed * 14) * 0.09;
-        animateMonsterRig(boss.rig, 'saigomo', elapsed * 0.22, false);
+        animateMonsterRig(boss.rig, bossId, elapsed * 0.22, false);
         if (this.bossStunTimer <= 0) {
           boss.rig.group.rotation.z = 0;
           this.bossState = 'stalk';
           this.bossAttackCooldown = 1.15;
-          this.callbacks.onSystemNotice('🛡️ 사이고모의 제어의 결계가 다시 전개되었습니다!');
+          this.callbacks.onSystemNotice(`🛡️ ${bossBarrier}가 다시 전개되었습니다!`);
         }
       } else {
         boss.rig.group.rotation.z = 0;
@@ -2568,11 +3204,10 @@ export class MimicEngine {
 
           boss.rig.group.position.set(boss.x, 0, boss.z);
           boss.rig.group.rotation.y = boss.yaw;
-          animateMonsterRig(boss.rig, 'saigomo', elapsed, true);
+          animateMonsterRig(boss.rig, bossId, elapsed, true);
 
           if (this.bossAttackCooldown <= 0) {
             this.bossAttackCount++;
-            // Every 3rd attack (or Phase 2 below 60% HP) unleashes Blood Nova Ultimate -> overheat stun!
             if (this.bossAttackCount % 3 === 0) {
               this.bossPattern = 'bloodNova';
             } else if (dist < 6.4) {
@@ -2631,19 +3266,24 @@ export class MimicEngine {
 
             this.bossAttackWarning =
               this.bossPattern === 'bloodNova'
-                ? '⚠ [오의] 심연의 혈옥 대폭발! 7.8m 밖으로 피하거나 붉은 핵을 패링하세요!'
+                ? isEnzukai
+                  ? '⚠ [오의] 질투의 심연 대폭발! 7.8m 밖으로 피하거나 황금 핵을 패링하세요!'
+                  : '⚠ [오의] 심연의 혈옥 대폭발! 7.8m 밖으로 피하거나 붉은 핵을 패링하세요!'
                 : this.bossPattern === 'crimsonSpikes'
-                  ? '⚠ 혈창 대지 폭발! 붉은 바닥 원 밖으로 회피하세요!'
+                  ? '⚠ 심연의 창 대지 폭발! 붉은 바닥 원 밖으로 회피하세요!'
                   : this.bossPattern === 'slam'
-                    ? '⚠ 진혼의 거미 대지 강타! 6.8m 밖으로 피하거나 도약 중 패링하세요!'
+                    ? isEnzukai
+                      ? '⚠ 질투의 한야 대지 강타! 6.8m 밖으로 피하거나 도약 중 패링하세요!'
+                      : '⚠ 진혼의 거미 대지 강타! 6.8m 밖으로 피하거나 도약 중 패링하세요!'
                     : this.bossPattern === 'lunge'
                       ? '⚠ 광폭 도약 돌진! 동굴 바위 기둥 뒤로 피해서 충돌시키세요!'
-                      : '⚠ 거미줄 저주 탄막 2연사! 기둥 뒤로 엄폐하세요!';
+                      : isEnzukai
+                        ? '⚠ 저주 황금탄막 2연사! 기둥 뒤로 엄폐하세요!'
+                        : '⚠ 거미줄 저주 탄막 2연사! 기둥 뒤로 엄폐하세요!';
             soundEngine.playBossTelegraph(this.bossPattern);
           }
         } else if (this.bossState === 'windup') {
           this.bossStateTimer -= dt;
-          // Dramatic leap / hover height during Slam or Blood Nova windup
           const hoverY =
             this.bossPattern === 'slam'
               ? Math.sin((1 - Math.max(0, this.bossStateTimer)) * Math.PI) * 2.15 + 0.35
@@ -2652,7 +3292,7 @@ export class MimicEngine {
                 : 0.14;
           boss.rig.group.position.set(boss.x, hoverY, boss.z);
           boss.rig.group.rotation.y = boss.yaw;
-          animateMonsterRig(boss.rig, 'saigomo', elapsed * 1.6, true);
+          animateMonsterRig(boss.rig, bossId, elapsed * 1.6, true);
 
           if (this.telegraphRing && (this.bossPattern === 'slam' || this.bossPattern === 'bloodNova')) {
             const radius = this.bossPattern === 'bloodNova' ? 7.8 : 6.8;
@@ -2683,14 +3323,19 @@ export class MimicEngine {
             this.bossTrailTimer += dt;
             if (this.bossTrailTimer >= 0.09) {
               this.bossTrailTimer = 0;
-              this.spawnShockwave(boss.x, boss.z, 2.0, 0xdc2626, 0.28);
+              this.spawnShockwave(boss.x, boss.z, 2.0, bossWaveColor, 0.28);
             }
             if (!this.canOccupy(nx, nz, 0.72)) {
               this.spawnShockwave(boss.x, boss.z, 5.2, 0xf59e0b, 0.48);
               this.cameraShakeTimer = 0.35;
               this.cameraShakeStrength = 0.16;
               soundEngine.playBossExplosion(false);
-              this.stunSaigomo(3.0, '💥 사이고모가 동굴 암벽에 강하게 충돌해 3초간 스턴되었습니다!');
+              this.stunBoss(
+                3.0,
+                isEnzukai
+                  ? `💥 ${bossName}가 무너진 도쿄 빌딩 기둥에 강하게 충돌해 3초간 스턴되었습니다!`
+                  : `💥 ${bossName}가 동굴 암벽에 강하게 충돌해 3초간 스턴되었습니다!`
+              );
               return false;
             }
             boss.x = nx;
@@ -2698,7 +3343,7 @@ export class MimicEngine {
             if (!this.bossAttackHitDone && Math.hypot(this.playerX - boss.x, this.playerZ - boss.z) < 2.1) {
               this.bossAttackHitDone = true;
               this.spawnShockwave(boss.x, boss.z, 3.6, 0xef4444, 0.35);
-              this.applyPlayerDamage(this.difficulty === 'nightmare' ? 42 : 35, 'saigomo');
+              this.applyPlayerDamage(this.difficulty === 'nightmare' ? 42 : 35, bossId);
               if (this.mode !== 'playing') return true;
             }
           } else if (this.bossPattern === 'webShot') {
@@ -2722,7 +3367,6 @@ export class MimicEngine {
               });
               soundEngine.playBossExplosion(false);
             }
-            // Second 4-orb staggered salvo mid-attack
             if (!this.bossSecondWaveDone && this.bossStateTimer <= 0.28) {
               this.bossSecondWaveDone = true;
               const baseAngle = Math.atan2(dx, dz);
@@ -2746,11 +3390,11 @@ export class MimicEngine {
             this.bossAttackHitDone = true;
             if (this.bossPattern === 'slam') {
               soundEngine.playBossExplosion(true);
-              this.spawnShockwave(boss.x, boss.z, 7.2, 0xef4444, 0.55);
+              this.spawnShockwave(boss.x, boss.z, 7.2, bossWaveColor, 0.55);
               this.cameraShakeTimer = 0.45;
               this.cameraShakeStrength = 0.18;
               if (dist <= 6.8) {
-                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 45 : 36, 'saigomo');
+                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 45 : 36, bossId);
                 if (this.mode !== 'playing') return true;
               }
             } else if (this.bossPattern === 'crimsonSpikes') {
@@ -2766,23 +3410,22 @@ export class MimicEngine {
                 spike.scale.set(1.15, 0.1, 1.15);
                 this.worldGroup.add(spike);
                 sz.spikeMesh = spike;
-                this.spawnShockwave(sz.x, sz.z, 2.5, 0xdc2626, 0.35);
+                this.spawnShockwave(sz.x, sz.z, 2.5, bossWaveColor, 0.35);
                 if (Math.hypot(this.playerX - sz.x, this.playerZ - sz.z) <= 2.15) {
                   hitAnySpike = true;
                 }
               }
               if (hitAnySpike) {
-                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 42 : 34, 'saigomo');
+                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 42 : 34, bossId);
                 if (this.mode !== 'playing') return true;
               }
             } else if (this.bossPattern === 'bloodNova') {
               soundEngine.playBossExplosion(true);
-              this.spawnShockwave(boss.x, boss.z, 8.6, 0xdc2626, 0.68);
+              this.spawnShockwave(boss.x, boss.z, 8.6, bossWaveColor, 0.68);
               this.spawnShockwave(boss.x, boss.z, 6.2, 0xfef2f2, 0.48);
               this.cameraShakeTimer = 0.6;
               this.cameraShakeStrength = 0.24;
 
-              // 8-way 360° radial cursed orb burst
               for (let k = 0; k < 8; k++) {
                 const ang = (k * Math.PI * 2) / 8;
                 const orb = createBossWebOrb();
@@ -2800,7 +3443,7 @@ export class MimicEngine {
               }
 
               if (dist <= 7.8) {
-                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 56 : 46, 'saigomo');
+                this.applyPlayerDamage(this.difficulty === 'nightmare' ? 56 : 46, bossId);
                 if (this.mode !== 'playing') return true;
               }
             }
@@ -2808,14 +3451,13 @@ export class MimicEngine {
 
           boss.rig.group.position.set(boss.x, 0, boss.z);
           boss.rig.group.rotation.y = boss.yaw;
-          animateMonsterRig(boss.rig, 'saigomo', elapsed * 2.0, true);
+          animateMonsterRig(boss.rig, bossId, elapsed * 2.0, true);
 
           if (this.bossStateTimer <= 0) {
             if (this.bossPattern === 'bloodNova') {
-              // Massive Ultimate exhausts Saigomo's control core -> 3.0s STUN opening!
-              this.stunSaigomo(
+              this.stunBoss(
                 3.0,
-                '💢 사이고모가 혈옥 대폭발의 반동으로 지쳐 3초간 스턴 상태에 빠졌습니다! 지금 공격하세요!'
+                `💢 ${bossName}가 오의 대폭발의 반동으로 지쳐 3초간 스턴 상태에 빠졌습니다! 지금 공격하세요!`
               );
               return false;
             }
@@ -2826,7 +3468,7 @@ export class MimicEngine {
         } else if (this.bossState === 'recover') {
           this.bossStateTimer -= dt;
           boss.rig.group.position.set(boss.x, 0, boss.z);
-          animateMonsterRig(boss.rig, 'saigomo', elapsed * 0.5, false);
+          animateMonsterRig(boss.rig, bossId, elapsed * 0.5, false);
           if (this.bossStateTimer <= 0) {
             this.bossState = 'stalk';
             this.bossAttackCooldown = this.difficulty === 'nightmare' ? 1.15 : 1.55;
@@ -2835,43 +3477,43 @@ export class MimicEngine {
       }
     }
 
-    // Secondary Threat in Cavern: Cursed Keiko stalks & can be stunned for 8s by sword
-    if (keiko) {
-      if (keiko.stunTimer > 0) {
-        keiko.stunTimer = Math.max(0, keiko.stunTimer - dt);
-        keiko.rig.group.position.set(keiko.x, -0.15, keiko.z);
-        animateMonsterRig(keiko.rig, 'keiko', elapsed * 0.3, false);
+    // Secondary Threat in Cavern: Keiko (Ch.4) / Kyogi (Ch.8) stalks & can be stunned for 8s by sword
+    if (minion) {
+      if (minion.stunTimer > 0) {
+        minion.stunTimer = Math.max(0, minion.stunTimer - dt);
+        minion.rig.group.position.set(minion.x, -0.15, minion.z);
+        animateMonsterRig(minion.rig, minionId, elapsed * 0.3, false);
       } else {
-        const kdx = this.playerX - keiko.x;
-        const kdz = this.playerZ - keiko.z;
+        const kdx = this.playerX - minion.x;
+        const kdz = this.playerZ - minion.z;
         const kdist = Math.hypot(kdx, kdz);
         if (kdist < 1.35) {
-          this.applyPlayerDamage(15, 'keiko');
-          keiko.stunTimer = 2.4;
+          this.applyPlayerDamage(15, minionId);
+          minion.stunTimer = 2.4;
           if (this.mode !== 'playing') return true;
         } else if (kdist <= 13.0) {
-          const hasLos = hasLineOfSight(keiko.x, keiko.z, this.playerX, this.playerZ, this.mapData);
+          const hasLos = hasLineOfSight(minion.x, minion.z, this.playerX, this.playerZ, this.mapData);
           let sx = this.playerX;
           let sz = this.playerZ;
           if (!hasLos) {
-            const kg = worldToGrid(keiko.x, keiko.z, this.mapData);
+            const kg = worldToGrid(minion.x, minion.z, this.mapData);
             const pg = worldToGrid(this.playerX, this.playerZ, this.mapData);
             const next = findNextStepBFS(kg.gx, kg.gz, pg.gx, pg.gz, this.mapData);
             const wp = gridToWorld(next.gx, next.gz, this.mapData);
             sx = wp.x;
             sz = wp.z;
           }
-          const rx = sx - keiko.x;
-          const rz = sz - keiko.z;
+          const rx = sx - minion.x;
+          const rz = sz - minion.z;
           const rlen = Math.hypot(rx, rz);
           if (rlen > 0.05) {
-            keiko.x += (rx / rlen) * keiko.baseSpeed * dt;
-            keiko.z += (rz / rlen) * keiko.baseSpeed * dt;
-            keiko.yaw = Math.atan2(rx, rz);
+            minion.x += (rx / rlen) * minion.baseSpeed * dt;
+            minion.z += (rz / rlen) * minion.baseSpeed * dt;
+            minion.yaw = Math.atan2(rx, rz);
           }
-          keiko.rig.group.position.set(keiko.x, 0, keiko.z);
-          keiko.rig.group.rotation.y = keiko.yaw;
-          animateMonsterRig(keiko.rig, 'keiko', elapsed, true);
+          minion.rig.group.position.set(minion.x, 0, minion.z);
+          minion.rig.group.rotation.y = minion.yaw;
+          animateMonsterRig(minion.rig, minionId, elapsed, true);
         }
       }
     }
@@ -2896,11 +3538,13 @@ export class MimicEngine {
       const m = this.jumpscareMonster;
       // Place camera directly in front of the monster's terrifying face with shake
       const faceY =
-        m.id === 'saigomo' || m.id === 'biwaki'
+        m.id === 'saigomo' || m.id === 'biwaki' || m.id === 'enzukai' || m.id === 'jigoku_warden'
           ? 2.1
           : m.id === 'oomukade'
             ? 1.68
-            : 1.92;
+            : m.id === 'kuishinbo' || m.id === 'hyakume'
+              ? 2.02
+              : 1.92;
       const forwardX = Math.sin(m.yaw);
       const forwardZ = Math.cos(m.yaw);
       const shakeX = (Math.random() - 0.5) * 0.14;
@@ -2935,18 +3579,48 @@ export class MimicEngine {
     let nearestObjectiveDist: number | null = null;
     let nearestObjectiveAngleDeg: number | null = null;
 
-    if (this.jobId === 'exorcist' || this.jobId === 'developer' || this.jobId === 'hacker') {
+    if (
+      this.inChaseMap ||
+      this.finalChaseActive ||
+      this.exitUnlocked ||
+      this.jobId === 'exorcist' ||
+      this.jobId === 'developer' ||
+      this.jobId === 'hacker'
+    ) {
       let targetX: number | null = null;
       let targetZ: number | null = null;
-      if (this.chapterId === 4) {
-        const boss = this.monsters.find((m) => m.id === 'saigomo');
+      if (this.inChaseMap || this.finalChaseActive || this.exitUnlocked) {
+        targetX = this.exitPos.x;
+        targetZ = this.exitPos.z;
+      } else if (this.chapterId === 5) {
+        if (this.carriedRat === 'raw' && this.poisonWellPos) {
+          targetX = this.poisonWellPos.x;
+          targetZ = this.poisonWellPos.z;
+        } else if (this.carriedRat === 'poisoned') {
+          const rm = this.monsters.find((m) => m.id === 'rin_mio');
+          if (rm) {
+            targetX = rm.x;
+            targetZ = rm.z;
+          }
+        } else {
+          let bestD = Infinity;
+          for (const item of this.collectibles) {
+            if (item.collected || item.kind !== 'rat') continue;
+            const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+            if (d < bestD) {
+              bestD = d;
+              targetX = item.x;
+              targetZ = item.z;
+            }
+          }
+        }
+      } else if (this.isBossChapter()) {
+        const bossId = this.getBossId();
+        const boss = this.monsters.find((m) => m.id === bossId);
         if (boss) {
           targetX = boss.x;
           targetZ = boss.z;
         }
-      } else if (this.exitUnlocked) {
-        targetX = this.exitPos.x;
-        targetZ = this.exitPos.z;
       } else {
         let bestD = Infinity;
         for (const item of this.collectibles) {
@@ -2964,7 +3638,6 @@ export class MimicEngine {
         const dx = targetX - this.playerX;
         const dz = targetZ - this.playerZ;
         nearestObjectiveDist = Math.round(Math.hypot(dx, dz));
-        // Relative bearing from player's facing vector (-sin(yaw), -cos(yaw))
         const worldAngle = Math.atan2(-dx, -dz);
         let rel = worldAngle - this.yaw;
         while (rel > Math.PI) rel -= Math.PI * 2;
@@ -2979,7 +3652,7 @@ export class MimicEngine {
       battery: this.battery,
       flashlightOn: this.flashlightOn,
       crouching: this.crouching,
-      collectedItems: this.collectedItems,
+      collectedItems: this.chapterId === 5 ? this.ratsFedCount : this.collectedItems,
       requiredItems: this.requiredItems,
       exitUnlocked: this.exitUnlocked,
       nearestPrompt,
@@ -2995,7 +3668,7 @@ export class MimicEngine {
       doctorReviveReady: this.doctorReviveReady,
       nearestObjectiveDist,
       nearestObjectiveAngleDeg,
-      isBossFight: this.chapterId === 4,
+      isBossFight: this.isBossChapter() && !this.inChaseMap && !this.exitUnlocked,
       playerHp: this.playerHp,
       playerMaxHp: this.playerMaxHp,
       hurtFlash: this.hurtFlash,
@@ -3004,14 +3677,21 @@ export class MimicEngine {
       bossStunTimer: this.bossStunTimer,
       bossAttackWarning: this.bossAttackWarning,
       bossHitsLanded: this.bossHitsLanded,
+      finalChaseActive: this.finalChaseActive,
+      finalChaseElapsed: this.finalChaseElapsed,
+      inChaseMap: this.inChaseMap,
+      carriedRat: this.carriedRat,
+      difficulty: this.difficulty,
     });
   }
 
   private buildAtmosphereParticles(chapterId: number, mapW: number, mapH: number) {
     this.particleBounds = { w: mapW, h: mapH };
 
-    // 1. Primary ambient particles: dust motes (Ch1), spirit wisps (Ch2), falling sakura petals (Ch3), cavern embers (Ch4)
-    const particleCount = chapterId === 3 ? 480 : 400;
+    // 1. Primary ambient particles: dust motes (Ch1), spirit wisps (Ch2/5/6), falling petals (Ch3), embers (Ch4/7/8)
+    const isPetalChapter = chapterId === 3;
+    const isBossParticle = chapterId === 4 || chapterId === 7 || chapterId === 8;
+    const particleCount = isPetalChapter ? 480 : 400;
     const pPositions = new Float32Array(particleCount * 3);
     const pVels = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
@@ -3019,13 +3699,13 @@ export class MimicEngine {
       pPositions[i * 3 + 1] = 0.2 + Math.random() * (this.activeWallHeight - 0.45);
       pPositions[i * 3 + 2] = (Math.random() - 0.5) * mapH * 0.92;
 
-      if (chapterId === 3) {
-        // Gentle diagonal falling & fluttering sakura petals
+      if (isPetalChapter) {
+        // Gentle diagonal falling & fluttering sakura petals (Ch3)
         pVels[i * 3] = 0.22 + Math.random() * 0.24;
         pVels[i * 3 + 1] = -(0.35 + Math.random() * 0.32);
         pVels[i * 3 + 2] = 0.1 + Math.random() * 0.22;
-      } else if (chapterId === 4 || chapterId === 2) {
-        // Rising embers / eerie spirit ash
+      } else if (chapterId === 4 || chapterId === 2 || chapterId === 5 || chapterId === 6 || chapterId === 7 || chapterId === 8) {
+        // Rising embers / Jigoku ash / abyssal sea spores / White Flame motes
         pVels[i * 3] = (Math.random() - 0.5) * 0.16;
         pVels[i * 3 + 1] = 0.12 + Math.random() * 0.22;
         pVels[i * 3 + 2] = (Math.random() - 0.5) * 0.16;
@@ -3040,13 +3720,27 @@ export class MimicEngine {
     this.particleGeo = new THREE.BufferGeometry();
     this.particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
     const particleColor =
-      chapterId === 3 ? 0xfbcfe8 : chapterId === 4 ? 0xf87171 : chapterId === 2 ? 0xd8b4fe : 0xdbeafe;
+      chapterId === 3
+        ? 0xfbcfe8
+        : chapterId === 7
+          ? 0xf97316
+          : chapterId === 4
+            ? 0xf87171
+            : chapterId === 8
+              ? 0xe0f2fe
+              : chapterId === 5
+                ? 0x7dd3fc
+                : chapterId === 6
+                  ? 0x2dd4bf
+                  : chapterId === 2
+                    ? 0xd8b4fe
+                    : 0xdbeafe;
     this.particleMat = new THREE.PointsMaterial({
       color: particleColor,
-      map: chapterId === 3 ? this.textures.sakuraPetal : this.textures.particleMote,
-      size: chapterId === 3 ? 0.22 : chapterId === 4 ? 0.14 : 0.12,
+      map: isPetalChapter ? this.textures.sakuraPetal : this.textures.particleMote,
+      size: isPetalChapter ? 0.22 : isBossParticle ? 0.14 : 0.12,
       transparent: true,
-      opacity: chapterId === 3 ? 0.82 : chapterId === 4 ? 0.72 : 0.48,
+      opacity: isPetalChapter ? 0.82 : isBossParticle ? 0.72 : 0.48,
       depthWrite: false,
     });
     this.ambientParticles = new THREE.Points(this.particleGeo, this.particleMat);
@@ -3070,7 +3764,21 @@ export class MimicEngine {
     this.mistGeo = new THREE.BufferGeometry();
     this.mistGeo.setAttribute('position', new THREE.BufferAttribute(mPositions, 3));
     const mistColor =
-      chapterId === 4 ? 0x5c1018 : chapterId === 3 ? 0x4b1d3f : chapterId === 2 ? 0x2a1b3d : 0x334155;
+      chapterId === 4
+        ? 0x5c1018
+        : chapterId === 8
+          ? 0x1e293b
+          : chapterId === 3
+            ? 0x4b1d3f
+            : chapterId === 7
+              ? 0x4a120a
+              : chapterId === 5
+                ? 0x0f2b38
+                : chapterId === 6
+                  ? 0x06373a
+                  : chapterId === 2
+                    ? 0x2a1b3d
+                    : 0x334155;
     this.mistMat = new THREE.PointsMaterial({
       color: mistColor,
       map: this.textures.mistPuff,
@@ -3088,6 +3796,7 @@ export class MimicEngine {
     const halfW = this.particleBounds.w * 0.48;
     const halfH = this.particleBounds.h * 0.48;
     const maxY = this.activeWallHeight - 0.25;
+    const isPetal = chapterId === 3;
 
     if (this.particleGeo && this.particleVelocities) {
       const attr = this.particleGeo.getAttribute('position') as THREE.BufferAttribute;
@@ -3098,7 +3807,7 @@ export class MimicEngine {
       for (let i = 0; i < count; i++) {
         const ix = i * 3;
         const flutter =
-          chapterId === 3 ? Math.sin(elapsed * 2.2 + i * 0.7) * 0.35 : Math.sin(elapsed * 1.1 + i) * 0.08;
+          isPetal ? Math.sin(elapsed * 2.2 + i * 0.7) * 0.35 : Math.sin(elapsed * 1.1 + i) * 0.08;
         arr[ix] += (vels[ix] + flutter) * dt;
         arr[ix + 1] += vels[ix + 1] * dt;
         arr[ix + 2] += (vels[ix + 2] + Math.cos(elapsed * 1.5 + i * 0.5) * 0.12) * dt;

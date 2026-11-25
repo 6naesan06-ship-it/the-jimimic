@@ -67,16 +67,21 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   const playerHpPct = Math.max(0, Math.min(100, (hud.playerHp / hud.playerMaxHp) * 100));
   const bossHpPct = Math.max(0, Math.min(100, (hud.bossHp / hud.bossMaxHp) * 100));
   const skillReady = hud.skillCooldown <= 0.05;
+  const isSwordChapter = chapter.id === 4 || chapter.id === 8;
+
+  const finalChasePulse = hud.finalChaseActive
+    ? 0.42 + Math.abs(Math.sin(hud.finalChaseElapsed * 4.5)) * 0.38
+    : 0;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-20 select-none">
-      {/* Danger Proximity Vignette */}
+      {/* Danger Proximity / Final Escape Chase Vignette */}
       <div
         className="absolute inset-0 transition-opacity duration-200"
         style={{
-          opacity: dangerRatio,
+          opacity: Math.max(dangerRatio, finalChasePulse),
           background:
-            'radial-gradient(circle at center, rgba(0,0,0,0) 44%, rgba(127, 29, 29, 0.72) 100%)',
+            'radial-gradient(circle at center, rgba(0,0,0,0) 40%, rgba(153, 27, 27, 0.82) 100%)',
         }}
       />
 
@@ -96,18 +101,47 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       <div className="horror-scanlines absolute inset-0 opacity-20" />
 
       {/* Top Left: Chapter, Job & Objective */}
-      <div className="absolute top-4 left-4 max-w-sm bg-[#08080c]/88 border border-zinc-800/90 rounded-md px-4 py-3 space-y-1.5">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
+      <div
+        className={`absolute top-4 left-4 max-w-sm bg-[#08080c]/88 border rounded-md px-4 py-3 space-y-1.5 ${
+          hud.difficulty === 'nightmare' ? 'border-red-900/90' : 'border-zinc-800/90'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
           <span className="text-red-400 font-medium">{chapter.title}</span>
           <span aria-hidden="true">·</span>
           <span className="text-zinc-200">{jobMeta.name}</span>
+          {hud.difficulty === 'nightmare' && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-950/90 border border-red-600/80 text-red-200 rounded">
+                ☠ 악몽
+              </span>
+            </>
+          )}
           <span aria-hidden="true">·</span>
           <span className="font-mono-tabular">{formatTime(hud.elapsedSeconds)}</span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
-          {hud.isBossFight ? (
+          {hud.inChaseMap || hud.finalChaseActive ? (
             <>
-              <span className="text-sm font-medium text-red-300">사이고모 토벌전 (축복받은 검)</span>
+              <span className="text-sm font-bold text-red-400 animate-pulse">
+                {chapter.id === 5
+                  ? '🚨 추격전 전용 맵 · 미오와 린을 피해 탈출!'
+                  : chapter.id === 1
+                    ? '🚨 추격전 전용 맵 · 지하실 출구로 탈출!'
+                    : chapter.id === 4 || chapter.id === 8
+                      ? '🚨 붕괴 추격전 맵 · 탈출 도리이로 전력 질주!'
+                      : '🚨 추격전 전용 맵 · 붉은 도리이로 탈출!'}
+              </span>
+              <span className="font-mono-tabular text-xs font-semibold text-emerald-400 shrink-0">
+                도주 중
+              </span>
+            </>
+          ) : hud.isBossFight ? (
+            <>
+              <span className="text-sm font-medium text-red-300">
+                {chapter.id === 8 ? '엔즈카이 토벌전 (백염의 성검)' : '사이고모 토벌전 (축복받은 검)'}
+              </span>
               <span className="font-mono-tabular text-sm font-semibold text-amber-300">
                 타격 {hud.bossHitsLanded}회
               </span>
@@ -117,8 +151,10 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <span className="text-sm font-medium text-zinc-100">
                 {hud.exitUnlocked
                   ? chapter.id === 1
-                    ? '지하실 문 봉인 해제 · 탈출 가능'
-                    : '출구 봉인 해제 · 붉은 도리이로 탈출'
+                    ? '지하실 문 개방 · 들어가면 추격전 시작!'
+                    : chapter.id === 5
+                      ? '선착장 출구 개방 · 들어가면 미오와 린 추격전!'
+                      : '출구 개방 · 들어가면 추격전 시작!'
                   : `${chapter.itemNoun} 수집`}
               </span>
               <span
@@ -133,21 +169,56 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
         <p className="text-xs text-zinc-400 leading-snug">{chapter.objectiveLabel}</p>
 
-        {/* Exorcist / Developer Spirit Compass */}
+        {/* Chapter 5 Rat & Poisoned Well Inventory Status */}
+        {chapter.id === 5 && !hud.inChaseMap && !hud.exitUnlocked && (
+          <div
+            className={`px-2.5 py-1.5 rounded border text-xs font-medium ${
+              hud.carriedRat === 'poisoned'
+                ? 'bg-emerald-950/75 border-emerald-600/70 text-emerald-200'
+                : hud.carriedRat === 'raw'
+                  ? 'bg-amber-950/75 border-amber-600/70 text-amber-200'
+                  : 'bg-zinc-900/80 border-zinc-700/80 text-zinc-300'
+            }`}
+          >
+            {hud.carriedRat === 'poisoned'
+              ? '🐀 보유 중: 독에 절인 쥐 → 미오와 린에게 다가가 [E]'
+              : hud.carriedRat === 'raw'
+                ? '🐀 보유 중: 시궁쥐 → 초록빛 독이 든 우물에서 [E]'
+                : '🐀 보유 쥐 없음 → 먼저 바닥의 시궁쥐를 잡으세요'}
+          </div>
+        )}
+
+        {/* Exorcist / Developer / Hacker / Chase Spirit Compass */}
         {hud.nearestObjectiveDist !== null && hud.nearestObjectiveAngleDeg !== null && (
-          <div className="flex items-center gap-2 pt-1.5 border-t border-zinc-800/80 text-xs text-amber-300">
+          <div
+            className={`flex items-center gap-2 pt-1.5 border-t border-zinc-800/80 text-xs ${
+              hud.inChaseMap || hud.finalChaseActive
+                ? 'text-emerald-300 font-semibold'
+                : 'text-amber-300'
+            }`}
+          >
             <Compass
               className="w-4 h-4 shrink-0"
               style={{ transform: `rotate(${hud.nearestObjectiveAngleDeg}deg)` }}
             />
             <span>
-              {hud.isBossFight
-                ? '사이고모 위치'
-                : hud.exitUnlocked
-                  ? chapter.id === 1
-                    ? '지하실 문 방향'
-                    : '출구 방향'
-                  : '가장 가까운 봉인'}{' '}
+              {hud.inChaseMap
+                ? '추격전 탈출 출구 방향'
+                : hud.isBossFight
+                  ? chapter.id === 8
+                    ? '엔즈카이 위치'
+                    : '사이고모 위치'
+                  : hud.exitUnlocked
+                    ? chapter.id === 1
+                      ? '추격전 진입 문 방향'
+                      : '추격전 진입 출구 방향'
+                    : chapter.id === 5
+                      ? hud.carriedRat === 'poisoned'
+                        ? '미오와 린 위치'
+                        : hud.carriedRat === 'raw'
+                          ? '독이 든 우물 위치'
+                          : '가장 가까운 시궁쥐'
+                      : '가장 가까운 봉인'}{' '}
               · <span className="font-mono-tabular">{hud.nearestObjectiveDist}m</span>
             </span>
           </div>
@@ -177,19 +248,54 @@ export const GameHUD: React.FC<GameHUDProps> = ({
 
         {!hud.isBossFight && hud.anyMonsterChasing && closestMonster && (
           <p className="text-xs font-semibold text-red-400 pt-1 border-t border-zinc-800/80">
-            추격 중: {closestMonster.name} (
-            <span className="font-mono-tabular">{hud.nearestMonsterDist.toFixed(1)}m</span> · 12m
-            이상 벗어나면 정지)
+            {hud.inChaseMap || hud.finalChaseActive ? (
+              <>
+                총공세 추격: {closestMonster.name} (
+                <span className="font-mono-tabular">{hud.nearestMonsterDist.toFixed(1)}m</span> ·
+                멈추지 않고 끝까지 추격합니다!)
+              </>
+            ) : (
+              <>
+                추격 중: {closestMonster.name} (
+                <span className="font-mono-tabular">{hud.nearestMonsterDist.toFixed(1)}m</span> ·
+                {hud.difficulty === 'nightmare' ? '15.5m' : '12m'} 이상 벗어나면 정지)
+              </>
+            )}
           </p>
         )}
       </div>
 
-      {/* Chapter 4 Top-Center Boss Health Bar & Attack / Stun Status */}
+      {/* Dedicated Chase Map / Final Escape Top-Center Urgent Banner */}
+      {(hud.inChaseMap || hud.finalChaseActive) && (
+        <div className="absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 w-[min(92vw,30rem)] bg-[#140407]/94 border border-red-600/85 rounded-md px-4 py-2.5 space-y-1 shadow-2xl">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="font-serif-kr font-bold text-red-300 animate-pulse">
+              🚨 CHASE SEQUENCE · 추격전 전용 맵
+            </span>
+            {hud.nearestObjectiveDist !== null && (
+              <span className="font-mono-tabular font-bold text-emerald-300">
+                출구까지 {hud.nearestObjectiveDist}m
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-200 leading-snug">
+            {chapter.id === 5
+              ? '독에 굶주린 미오와 린이 끝까지 뒤쫓아옵니다! 초록색 나침반을 따라 붉은 도리이 출구로 전력 질주하세요!'
+              : chapter.id === 1
+                ? '어둠 속의 괴물들이 미친 듯이 몰려옵니다! 초록색 나침반을 따라 탈출구로 달려가세요!'
+                : chapter.id === 4 || chapter.id === 8
+                  ? '붕괴하는 통로 너머 적의 원념이 끝까지 뒤쫓습니다! 나침반을 따라 탈출 도리이로 전력 질주하세요!'
+                  : '이 장의 괴물들이 추격전 전용 통로에서 끝까지 뒤쫓아옵니다! 초록빛 탈출구까지 멈추지 말고 달리세요!'}
+          </p>
+        </div>
+      )}
+
+      {/* Final Chapter Top-Center Boss Health Bar & Attack / Stun Status */}
       {hud.isBossFight && (
         <div className="absolute top-14 sm:top-4 left-1/2 -translate-x-1/2 w-[min(92vw,28rem)] bg-[#08080c]/92 border border-red-900/80 rounded-md px-4 py-2.5 space-y-1.5 shadow-xl">
           <div className="flex items-center justify-between text-xs">
             <span className="font-serif-kr font-bold text-red-300">
-              사이고모 (거미 형상 킨토루)
+              {chapter.id === 8 ? '엔즈카이 (질투의 짐승)' : '사이고모 (거미 형상 킨토루)'}
             </span>
             <span className="font-mono-tabular text-zinc-200 font-semibold">
               {hud.bossHp} / {hud.bossMaxHp}
@@ -213,7 +319,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </p>
           ) : (
             <p className="text-center text-[11px] text-amber-200/80">
-              🛡️ 제어의 결계 활성 · 스턴 시에만 피해! (기둥 충돌 / 공격 준비 패링 / 오의 후 3초 스턴)
+              🛡️ {chapter.id === 8 ? '질투의 결계' : '제어의 결계'} 활성 · 스턴 시에만 피해! (기둥 충돌 / 공격 준비 패링 / 오의 후 {hud.difficulty === 'nightmare' ? '2.4초' : '3초'} 스턴)
             </p>
           )}
         </div>
@@ -279,7 +385,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       )}
 
       {/* Discreet Mouse Look Hint when pointer not locked */}
-      {!hud.pointerLocked && !hud.isBossFight && (
+      {!hud.pointerLocked && !hud.isBossFight && !hud.finalChaseActive && !hud.inChaseMap && (
         <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2">
           <button
             onClick={onLockPointer}
@@ -290,14 +396,14 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
       )}
 
-      {/* Bottom Left: HP (Ch.4), Battery, Stamina & Active Job Skill */}
+      {/* Bottom Left: HP (Ch.4 & Ch.8), Battery, Stamina & Active Job Skill */}
       <div className="absolute bottom-4 left-4 w-72 bg-[#08080c]/88 border border-zinc-800/90 rounded-md p-3.5 space-y-2.5">
-        {hud.isBossFight && (
+        {isSwordChapter && (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-red-300 flex items-center gap-1.5 font-medium">
                 <Heart className="w-3.5 h-3.5 text-red-500" />
-                <span>야스의 체력</span>
+                <span>{chapter.id === 8 ? '이사무의 체력' : '야스의 체력'}</span>
               </span>
               <span className="font-mono-tabular text-zinc-200 font-semibold">
                 {hud.jobId === 'developer' || hud.jobId === 'hacker'
@@ -381,7 +487,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
       {/* Bottom Right: Compact Controls & Quick Touch Buttons */}
       <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col items-end gap-2">
         <div className="flex items-center gap-2">
-          {hud.isBossFight && (
+          {isSwordChapter && (
             <button
               onClick={onSwordAttack}
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded border bg-amber-900/90 hover:bg-amber-800 border-amber-500/80 text-amber-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer"

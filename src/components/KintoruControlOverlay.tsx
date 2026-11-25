@@ -4,6 +4,7 @@ import { soundEngine } from '../game/soundEngine';
 interface KintoruControlOverlayProps {
   paused: boolean;
   chapterId: number;
+  nightmare?: boolean;
   onComplete: (survived: boolean) => void;
 }
 
@@ -26,9 +27,12 @@ interface ClickBurst {
 const SURVIVAL_SECONDS = 6.0;
 const GRAB_THRESHOLD = 0.07;
 
-function createInitialHands(chapterId: number): ApproachingHand[] {
-  const count = chapterId >= 4 ? 6 : 5;
-  const speedScale = chapterId === 4 ? 1.12 : chapterId === 3 ? 1.04 : 0.96;
+function createInitialHands(chapterId: number, nightmare = false): ApproachingHand[] {
+  const isBoss = chapterId === 4 || chapterId === 8;
+  const count = nightmare ? 7 : isBoss ? 6 : 5;
+  const speedScale =
+    (isBoss ? 1.12 : chapterId === 3 || chapterId === 7 ? 1.04 : 0.96) *
+    (nightmare ? 1.24 : 1.0);
   const hands: ApproachingHand[] = [];
   for (let i = 0; i < count; i++) {
     const baseAngle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
@@ -47,10 +51,13 @@ function createInitialHands(chapterId: number): ApproachingHand[] {
 export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
   paused,
   chapterId,
+  nightmare = false,
   onComplete,
 }) => {
   const [remaining, setRemaining] = useState<number>(SURVIVAL_SECONDS);
-  const [hands, setHands] = useState<ApproachingHand[]>(() => createInitialHands(chapterId));
+  const [hands, setHands] = useState<ApproachingHand[]>(() =>
+    createInitialHands(chapterId, nightmare)
+  );
   const [bursts, setBursts] = useState<ClickBurst[]>([]);
   const [banishedCount, setBanishedCount] = useState<number>(0);
 
@@ -180,16 +187,19 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
         />
       </div>
 
-      {/* Top-Center Instruction & 3s Survival Timer */}
+      {/* Top-Center Instruction & 6s Survival Timer */}
       <div className="pointer-events-none absolute top-16 sm:top-6 left-1/2 -translate-x-1/2 w-[min(92vw,30rem)] bg-[#090408]/95 border border-red-600/80 rounded-md px-5 py-3.5 shadow-2xl space-y-2 text-center">
         <div className="flex items-center justify-between text-[11px] font-semibold tracking-wider text-red-400">
-          <span>KINTORU · 정신 지배 침식</span>
+          <span>
+            {chapterId >= 5 ? 'ENZUKAI · 질투의 침식' : 'KINTORU · 정신 지배 침식'}
+            {nightmare ? ' (악몽)' : ''}
+          </span>
           <span className="font-mono-tabular text-amber-300">
             처낸 손 {banishedCount}회
           </span>
         </div>
         <h2 className="text-lg sm:text-xl font-serif-kr font-black text-red-100 animate-pulse">
-          킨토루의 지배를 벗어나세요!
+          {chapterId >= 5 ? '엔즈카이의 질투에서 벗어나세요!' : '킨토루의 지배를 벗어나세요!'}
         </h2>
         <p className="text-xs text-zinc-300">
           다가오는 손을 마우스로 빠르게 터치(클릭)해{' '}
@@ -242,7 +252,7 @@ export const KintoruControlOverlay: React.FC<KintoruControlOverlayProps> = ({
             key={hand.id}
             type="button"
             onPointerDown={(e) => handleTouchHand(e, hand.id, xPct, yPct)}
-            aria-label="다가오는 킨토루의 손 터치하기"
+            aria-label={chapterId >= 5 ? '다가오는 엔즈카이의 손 터치하기' : '다가오는 킨토루의 손 터치하기'}
             className="absolute -translate-x-1/2 -translate-y-1/2 w-36 h-36 sm:w-44 sm:h-44 flex items-center justify-center cursor-pointer touch-none focus:outline-none group"
             style={{
               left: `${xPct}%`,

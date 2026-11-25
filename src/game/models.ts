@@ -34,7 +34,25 @@ export function createMonsterRig(
             ? textures.oomukadeFace
             : type === 'saigomo'
               ? textures.saigomoFace
-              : textures.keikoFace;
+              : type === 'keiko'
+                ? textures.keikoFace
+                : type === 'kyogi'
+                  ? textures.kyogiFace
+                  : type === 'nure'
+                    ? textures.nureFace
+                    : type === 'hyakume'
+                      ? textures.hyakumeFace
+                      : type === 'nagisa'
+                        ? textures.nagisaFace
+                        : type === 'kuishinbo'
+                          ? textures.kuishinboFace
+                          : type === 'rin_mio'
+                            ? textures.rinMioFace
+                            : type === 'jigoku_warden'
+                              ? textures.jigokuWardenFace
+                              : type === 'senzai_fallen'
+                                ? textures.senzaiFallenFace
+                                : textures.enzukaiFace;
 
   const faceMat = new THREE.MeshStandardMaterial({
     map: faceTex,
@@ -51,7 +69,19 @@ export function createMonsterRig(
           ? 0xc026d3
           : type === 'biwaki'
             ? 0x6366f1
-            : 0xe11d48;
+            : type === 'kyogi' || type === 'enzukai' || type === 'senzai_fallen'
+              ? 0xeab308
+              : type === 'nagisa' || type === 'nure'
+                ? 0x2dd4bf
+                : type === 'hyakume'
+                  ? 0xf97316
+                  : type === 'jigoku_warden'
+                    ? 0xc084fc
+                    : type === 'kuishinbo'
+                      ? 0xfb7185
+                      : type === 'rin_mio'
+                        ? 0xf472b6
+                        : 0xe11d48;
 
   const auraLight = new THREE.PointLight(eyeGlowColor, 1.8, 7.5, 1.8);
   auraLight.position.set(0, 1.75, 0.45);
@@ -283,7 +313,7 @@ export function createMonsterRig(
     rightArm = buildClawedArm(carapaceMat, amberGlowMat, 1);
     rightArm.position.set(0.27, 1.56, 0.22);
     group.add(leftArm, rightArm);
-  } else {
+  } else if (type === 'saigomo') {
     // Saigomo (Spider Demon Final Form of Kintoru): Crimson Hakama + Spider Legs + Noh Mask + Orbiting Ofuda
     const crimsonSilk = new THREE.MeshStandardMaterial({
       color: 0x88131d,
@@ -378,6 +408,316 @@ export function createMonsterRig(
     }
     group.add(ring);
     orbitRing = ring;
+  } else if (type === 'kyogi') {
+    // Kyogi: Kiiroibara Cultist Leader in black & gold robes
+    const cultBlack = new THREE.MeshStandardMaterial({ color: 0x111015, roughness: 0.8 });
+    const roseGold = new THREE.MeshStandardMaterial({
+      color: 0xeab308,
+      emissive: 0x713f12,
+      emissiveIntensity: 0.4,
+      roughness: 0.35,
+      metalness: 0.65,
+    });
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.48, 1.38, 10), cultBlack);
+    robe.position.y = 0.69;
+    robe.castShadow = true;
+    group.add(robe);
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.72, 10), cultBlack);
+    chest.position.y = 1.64;
+    group.add(chest);
+    const sash = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.18, 10), roseGold);
+    sash.position.y = 1.32;
+    group.add(sash);
+    head.position.set(0, 2.08, 0.04);
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), faceMat);
+    mask.rotation.y = -Math.PI / 2;
+    head.add(mask);
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.42, 8), cultBlack);
+    hood.position.set(0, 0.16, -0.04);
+    head.add(hood);
+    group.add(head);
+    leftArm = buildClawedArm(cultBlack, roseGold, -1);
+    leftArm.position.set(-0.29, 1.82, 0.02);
+    rightArm = buildClawedArm(cultBlack, roseGold, 1);
+    rightArm.position.set(0.29, 1.82, 0.02);
+    group.add(leftArm, rightArm);
+  } else if (type === 'nagisa') {
+    // Nagisa: Deep-sea serpent monster
+    const scaleMat = new THREE.MeshStandardMaterial({ color: 0x0b3b49, roughness: 0.42, metalness: 0.3 });
+    const finMat = new THREE.MeshStandardMaterial({
+      color: 0x2dd4bf,
+      emissive: 0x0f766e,
+      emissiveIntensity: 0.5,
+      roughness: 0.3,
+    });
+    for (let s = 0; s < 4; s++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.32 - s * 0.05, 10, 8), scaleMat);
+      seg.position.set(0, 0.36 + (3 - s) * 0.12, -0.22 - s * 0.38);
+      group.add(seg);
+    }
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.15, 10), scaleMat);
+    torso.position.y = 1.18;
+    group.add(torso);
+    head.position.set(0, 1.94, 0.08);
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), faceMat);
+    headMesh.rotation.y = -Math.PI / 2;
+    head.add(headMesh);
+    [-1, 1].forEach((side) => {
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.36, 5), finMat);
+      fin.position.set(side * 0.22, 0.06, -0.05);
+      fin.rotation.z = side * -0.9;
+      head.add(fin);
+    });
+    group.add(head);
+    leftArm = buildClawedArm(scaleMat, finMat, -1, 1.05);
+    leftArm.position.set(-0.27, 1.62, 0.04);
+    rightArm = buildClawedArm(scaleMat, finMat, 1, 1.05);
+    rightArm.position.set(0.27, 1.62, 0.04);
+    group.add(leftArm, rightArm);
+  } else if (type === 'kuishinbo') {
+    // Kuishinbo: Hulking gluttony monster dripping black slime
+    const slimeMat = new THREE.MeshStandardMaterial({ color: 0x181316, roughness: 0.25, metalness: 0.2 });
+    const fleshMat = new THREE.MeshStandardMaterial({ color: 0x45272b, roughness: 0.72 });
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.56, 14, 12), fleshMat);
+    belly.scale.set(1.05, 1.25, 0.92);
+    belly.position.y = 0.95;
+    belly.castShadow = true;
+    group.add(belly);
+    const hump = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), slimeMat);
+    hump.position.set(0, 1.56, -0.1);
+    group.add(hump);
+    head.position.set(0, 1.88, 0.14);
+    const faceSphere = new THREE.Mesh(new THREE.SphereGeometry(0.3, 14, 12), faceMat);
+    faceSphere.rotation.y = -Math.PI / 2;
+    head.add(faceSphere);
+    group.add(head);
+    leftArm = buildClawedArm(fleshMat, slimeMat, -1, 1.25);
+    leftArm.position.set(-0.46, 1.52, 0.05);
+    rightArm = buildClawedArm(fleshMat, slimeMat, 1, 1.25);
+    rightArm.position.set(0.46, 1.52, 0.05);
+    group.add(leftArm, rightArm);
+  } else if (type === 'rin_mio') {
+    // Rin & Mio: Crimson kimono sister with a second mouth/face on the back of her head
+    const kimonoMat = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.72 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.9 });
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.44, 1.28, 10), kimonoMat);
+    skirt.position.y = 0.64;
+    group.add(skirt);
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.24, 0.66, 10), kimonoMat);
+    chest.position.y = 1.54;
+    group.add(chest);
+    head.position.set(0, 2.02, 0.03);
+    const frontHead = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), faceMat);
+    frontHead.rotation.y = -Math.PI / 2;
+    head.add(frontHead);
+    const backMioHead = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), faceMat);
+    backMioHead.rotation.y = Math.PI / 2;
+    backMioHead.position.set(0, 0.04, -0.14);
+    head.add(backMioHead);
+    const hairCrown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.225, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      hairMat
+    );
+    head.add(hairCrown);
+    group.add(head);
+    leftArm = buildClawedArm(kimonoMat, hairMat, -1);
+    leftArm.position.set(-0.27, 1.76, 0.02);
+    rightArm = buildClawedArm(kimonoMat, hairMat, 1);
+    rightArm.position.set(0.27, 1.76, 0.02);
+    group.add(leftArm, rightArm);
+  } else if (type === 'enzukai') {
+    // Enzukai: Beast of Jealousy (Book II Final Boss) - Golden Hannya Demon + Crimson Hakama + Orbiting Rose Seals
+    const crimsonHakama = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.55, metalness: 0.15 });
+    const obsidianArmor = new THREE.MeshStandardMaterial({ color: 0x141016, roughness: 0.3, metalness: 0.5 });
+    const jealousGold = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0x854d0e,
+      emissiveIntensity: 0.55,
+      roughness: 0.22,
+      metalness: 0.85,
+    });
+
+    const hakama = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.54, 1.35, 12), crimsonHakama);
+    hakama.position.y = 0.675;
+    hakama.castShadow = true;
+    group.add(hakama);
+
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.78, 12), obsidianArmor);
+    torso.position.y = 1.65;
+    torso.castShadow = true;
+    group.add(torso);
+
+    const sash = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.24, 12), jealousGold);
+    sash.position.y = 1.36;
+    group.add(sash);
+
+    // 4 Golden Jealousy Spine Tendrils behind shoulders
+    for (let i = 0; i < 4; i++) {
+      const side = i < 2 ? -1 : 1;
+      const idx = i % 2;
+      const legPivot = new THREE.Group();
+      legPivot.position.set(side * 0.25, 1.68 - idx * 0.22, -0.18);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.024, 0.9, 6), obsidianArmor);
+      upper.rotation.z = side * -1.1;
+      upper.position.set(side * 0.4, 0.28, -0.1);
+      legPivot.add(upper);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.75, 6), jealousGold);
+      tip.rotation.z = side * -0.4;
+      tip.position.set(side * 0.82, 0.45, -0.12);
+      legPivot.add(tip);
+      group.add(legPivot);
+      spiderLegs.push(legPivot);
+    }
+
+    head.position.set(0, 2.2, 0.04);
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.23, 16, 14), faceMat);
+    mask.rotation.y = -Math.PI / 2;
+    mask.scale.set(1, 1.15, 0.92);
+    head.add(mask);
+    [-1, 1].forEach((side) => {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.052, 0.38, 6), jealousGold);
+      horn.position.set(side * 0.14, 0.28, 0.02);
+      horn.rotation.z = side * -0.35;
+      head.add(horn);
+    });
+    group.add(head);
+
+    leftArm = buildClawedArm(crimsonHakama, jealousGold, -1, 1.08);
+    leftArm.position.set(-0.32, 1.9, 0.04);
+    rightArm = buildClawedArm(crimsonHakama, jealousGold, 1, 1.08);
+    rightArm.position.set(0.32, 1.9, 0.04);
+    group.add(leftArm, rightArm);
+
+    const ring = new THREE.Group();
+    ring.position.y = 1.62;
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const seal = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), jealousGold);
+      seal.position.set(Math.cos(angle) * 0.78, Math.sin(i * 1.5) * 0.14, Math.sin(angle) * 0.78);
+      ring.add(seal);
+    }
+    group.add(ring);
+    orbitRing = ring;
+  } else if (type === 'nure') {
+    // Nure: Snake yokai with long wet emerald-dark serpent coils & drenched black hair
+    const serpentMat = new THREE.MeshStandardMaterial({ color: 0x0f3b3e, roughness: 0.32, metalness: 0.28 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.85 });
+    for (let s = 0; s < 5; s++) {
+      const coil = new THREE.Mesh(new THREE.SphereGeometry(0.32 - s * 0.04, 12, 10), serpentMat);
+      coil.position.set(Math.sin(s * 0.9) * 0.14, 0.34 + (4 - s) * 0.1, -0.18 - s * 0.38);
+      group.add(coil);
+    }
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.05, 10), serpentMat);
+    torso.position.y = 1.24;
+    group.add(torso);
+    head.position.set(0, 1.94, 0.06);
+    const hMesh = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), faceMat);
+    hMesh.rotation.y = -Math.PI / 2;
+    head.add(hMesh);
+    const wetHair = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.78, 0.16), hairMat);
+    wetHair.position.set(0, -0.26, -0.15);
+    head.add(wetHair);
+    group.add(head);
+    leftArm = buildClawedArm(serpentMat, hairMat, -1, 1.08);
+    leftArm.position.set(-0.26, 1.66, 0.04);
+    rightArm = buildClawedArm(serpentMat, hairMat, 1, 1.08);
+    rightArm.position.set(0.26, 1.66, 0.04);
+    group.add(leftArm, rightArm);
+  } else if (type === 'hyakume') {
+    // Hyakume: Hulking one-eyed giant covered in grotesque staring eyes
+    const giantSkin = new THREE.MeshStandardMaterial({ color: 0x3b2c2e, roughness: 0.82 });
+    const eyeOrbMat = new THREE.MeshStandardMaterial({
+      color: 0xfef3c7,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.75,
+      roughness: 0.3,
+    });
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.56, 1.48, 12), giantSkin);
+    torso.position.y = 0.95;
+    torso.castShadow = true;
+    group.add(torso);
+    // Extra eyes protruding from shoulders & chest
+    [
+      [-0.36, 1.56, 0.25],
+      [0.36, 1.56, 0.25],
+      [0, 1.22, 0.44],
+      [-0.24, 1.02, 0.42],
+    ].forEach(([ex, ey, ez]) => {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), eyeOrbMat);
+      orb.position.set(ex, ey, ez);
+      group.add(orb);
+    });
+    head.position.set(0, 2.02, 0.08);
+    const cyclopsHead = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 12), faceMat);
+    cyclopsHead.rotation.y = -Math.PI / 2;
+    head.add(cyclopsHead);
+    group.add(head);
+    leftArm = buildClawedArm(giantSkin, eyeOrbMat, -1, 1.32);
+    leftArm.position.set(-0.5, 1.64, 0.04);
+    rightArm = buildClawedArm(giantSkin, eyeOrbMat, 1, 1.32);
+    rightArm.position.set(0.5, 1.64, 0.04);
+    group.add(leftArm, rightArm);
+  } else if (type === 'jigoku_warden') {
+    // Jigoku Warden: Tall spectral soul guide with tattered hell shroud & glowing spirit lantern
+    const shroudMat = new THREE.MeshStandardMaterial({ color: 0x1e1628, roughness: 0.88 });
+    const soulGlowMat = new THREE.MeshStandardMaterial({
+      color: 0xe879f9,
+      emissive: 0xa855f7,
+      emissiveIntensity: 1.1,
+      roughness: 0.25,
+    });
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.52, 1.52, 10), shroudMat);
+    robe.position.y = 0.78;
+    robe.castShadow = true;
+    group.add(robe);
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 0.72, 10), shroudMat);
+    chest.position.y = 1.72;
+    group.add(chest);
+    head.position.set(0, 2.22, 0.04);
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), faceMat);
+    mask.rotation.y = -Math.PI / 2;
+    head.add(mask);
+    const cowl = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.52, 8), shroudMat);
+    cowl.position.set(0, 0.16, -0.04);
+    head.add(cowl);
+    group.add(head);
+    leftArm = buildClawedArm(shroudMat, soulGlowMat, -1, 1.05);
+    leftArm.position.set(-0.3, 1.88, 0.02);
+    rightArm = buildClawedArm(shroudMat, soulGlowMat, 1, 1.05);
+    rightArm.position.set(0.3, 1.88, 0.02);
+    const lantern = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), soulGlowMat);
+    lantern.position.set(0.06, -0.45, 0.65);
+    rightArm.add(lantern);
+    group.add(leftArm, rightArm);
+  } else if (type === 'senzai_fallen') {
+    // Fallen Senzai: Corrupted cult executive brother with tattered dark coat & golden jealousy veins
+    const coatMat = new THREE.MeshStandardMaterial({ color: 0x1e1a18, roughness: 0.75 });
+    const curseGoldMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xa16207,
+      emissiveIntensity: 0.65,
+      roughness: 0.3,
+    });
+    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.44, 1.32, 10), coatMat);
+    coat.position.y = 0.66;
+    coat.castShadow = true;
+    group.add(coat);
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.68, 10), coatMat);
+    chest.position.y = 1.6;
+    group.add(chest);
+    const scarf = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.16, 10), curseGoldMat);
+    scarf.position.y = 1.32;
+    group.add(scarf);
+    head.position.set(0, 2.06, 0.04);
+    const hMesh = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), faceMat);
+    hMesh.rotation.y = -Math.PI / 2;
+    head.add(hMesh);
+    group.add(head);
+    leftArm = buildClawedArm(coatMat, curseGoldMat, -1);
+    leftArm.position.set(-0.28, 1.82, 0.02);
+    rightArm = buildClawedArm(coatMat, curseGoldMat, 1);
+    rightArm.position.set(0.28, 1.82, 0.02);
+    group.add(leftArm, rightArm);
   }
 
   return {
@@ -427,13 +767,13 @@ export function animateMonsterRig(
 
   const twitch = Math.sin(elapsed * (isChasing ? 16 : 4.2)) * (isChasing ? 0.14 : 0.06);
   const headBaseTilt =
-    type === 'shizu'
+    type === 'shizu' || type === 'nure'
       ? 0.42
-      : type === 'megumi'
+      : type === 'megumi' || type === 'rin_mio' || type === 'senzai_fallen'
         ? 0.28
-        : type === 'keiko'
+        : type === 'keiko' || type === 'enzukai' || type === 'jigoku_warden'
           ? -0.18
-          : type === 'saigomo'
+          : type === 'saigomo' || type === 'hyakume'
             ? -0.12
             : 0.1;
   rig.head.rotation.z = headBaseTilt + twitch;
@@ -547,7 +887,7 @@ export function createPaperLantern(color = 0xff8a3d): { group: THREE.Group; ligh
 }
 
 export function createCollectibleMesh(
-  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'battery' | 'diary',
+  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary',
   textures: ProceduralTextureSet
 ): THREE.Group {
   const group = new THREE.Group();
@@ -634,6 +974,46 @@ export function createCollectibleMesh(
     });
     const halo = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.015, 6, 20), frameMat);
     group.add(halo);
+  } else if (kind === 'rat') {
+    const furMat = new THREE.MeshStandardMaterial({
+      color: 0x3f3f46,
+      roughness: 0.88,
+    });
+    const earTailMat = new THREE.MeshStandardMaterial({
+      color: 0xfda4af,
+      roughness: 0.65,
+    });
+    const eyeMat = new THREE.MeshStandardMaterial({
+      color: 0xfef08a,
+      emissive: 0xef4444,
+      emissiveIntensity: 1.6,
+    });
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), furMat);
+    body.scale.set(0.85, 0.72, 1.48);
+    group.add(body);
+
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.17, 10), furMat);
+    head.rotation.x = Math.PI / 2;
+    head.position.set(0, 0.02, 0.21);
+    group.add(head);
+
+    [-1, 1].forEach((side) => {
+      const ear = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.016, 8), earTailMat);
+      ear.rotation.x = Math.PI / 2.6;
+      ear.position.set(side * 0.055, 0.09, 0.13);
+      group.add(ear);
+
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 6), eyeMat);
+      eye.position.set(side * 0.036, 0.04, 0.21);
+      group.add(eye);
+    });
+
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.006, 0.34, 6), earTailMat);
+    tail.rotation.x = -Math.PI / 2.2;
+    tail.rotation.z = 0.22;
+    tail.position.set(0.03, -0.01, -0.28);
+    group.add(tail);
   } else if (kind === 'battery') {
     const bodyMat = new THREE.MeshStandardMaterial({
       color: 0x18181b,
@@ -1451,6 +1831,7 @@ export function createBlessedSwordViewModel(): THREE.Group {
   pivot.add(bladeSpine);
 
   const sacredEdge = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.8, 0.016), sacredEdgeMat);
+  sacredEdge.name = 'sacredEdge';
   sacredEdge.position.set(0, 0.56, -0.012);
   sacredEdge.rotation.x = -0.04;
   pivot.add(sacredEdge);
@@ -1461,6 +1842,21 @@ export function createBlessedSwordViewModel(): THREE.Group {
   pivot.add(tip);
 
   return pivot;
+}
+
+export function setSwordWhiteFlame(swordGroup: THREE.Group, whiteFlame: boolean) {
+  const edge = swordGroup.getObjectByName('sacredEdge') as THREE.Mesh | undefined;
+  if (!edge) return;
+  const mat = edge.material as THREE.MeshStandardMaterial;
+  if (whiteFlame) {
+    mat.color.setHex(0xffffff);
+    mat.emissive.setHex(0xbae6fd);
+    mat.emissiveIntensity = 2.0;
+  } else {
+    mat.color.setHex(0xfef08a);
+    mat.emissive.setHex(0xef4444);
+    mat.emissiveIntensity = 1.35;
+  }
 }
 
 export function createCavernStalagmite(inverted = false): THREE.Group {
@@ -1689,4 +2085,70 @@ export function createGroundWarningDisc(): THREE.Group {
   group.add(edge);
 
   return group;
+}
+
+export function createPoisonWellProp(): { group: THREE.Group; light: THREE.PointLight } {
+  const group = new THREE.Group();
+  const stoneMat = new THREE.MeshStandardMaterial({
+    color: 0x27272a,
+    roughness: 0.92,
+    metalness: 0.08,
+  });
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x2e1a12,
+    roughness: 0.85,
+  });
+  const poisonWaterMat = new THREE.MeshStandardMaterial({
+    color: 0x4ade80,
+    emissive: 0x16a34a,
+    emissiveIntensity: 1.85,
+    roughness: 0.15,
+    metalness: 0.35,
+  });
+
+  // Circular stone well rim
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.02, 0.95, 14, 1, true), stoneMat);
+  rim.position.y = 0.475;
+  rim.castShadow = true;
+  group.add(rim);
+
+  const rimTop = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.13, 8, 18), stoneMat);
+  rimTop.rotation.x = Math.PI / 2;
+  rimTop.position.y = 0.95;
+  group.add(rimTop);
+
+  // Glowing toxic poison pool inside the well
+  const water = new THREE.Mesh(new THREE.CircleGeometry(0.84, 16), poisonWaterMat);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.72;
+  group.add(water);
+
+  // Wooden well posts & shingled roof beam
+  [-0.86, 0.86].forEach((px) => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.9, 0.14), woodMat);
+    post.position.set(px, 1.4, 0);
+    post.castShadow = true;
+    group.add(post);
+  });
+
+  const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8, 8), woodMat);
+  crossbar.rotation.z = Math.PI / 2;
+  crossbar.position.y = 2.05;
+  group.add(crossbar);
+
+  const roofL = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 1.35), woodMat);
+  roofL.position.set(-0.48, 2.52, 0);
+  roofL.rotation.z = 0.42;
+  group.add(roofL);
+
+  const roofR = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 1.35), woodMat);
+  roofR.position.set(0.48, 2.52, 0);
+  roofR.rotation.z = -0.42;
+  group.add(roofR);
+
+  const light = new THREE.PointLight(0x22c55e, 2.8, 9.5, 1.6);
+  light.position.set(0, 1.35, 0);
+  group.add(light);
+
+  return { group, light };
 }

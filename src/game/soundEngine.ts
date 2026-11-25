@@ -210,9 +210,14 @@ class HorrorSoundEngine {
     const now = this.ctx.currentTime;
     const vol = Math.max(0.03, Math.min(0.28, (1 - distanceRatio) * 0.28));
 
-    if (monsterId === 'shizu' || monsterId === 'megumi') {
+    if (monsterId === 'shizu' || monsterId === 'megumi' || monsterId === 'kyogi') {
       // Unsettling detuned high hum / porcelain chime giggle cadence
-      const base = monsterId === 'megumi' ? [659, 698, 622] : [587, 622, 554];
+      const base =
+        monsterId === 'megumi'
+          ? [659, 698, 622]
+          : monsterId === 'kyogi'
+            ? [493.88, 523.25, 466.16]
+            : [587, 622, 554];
       base.forEach((freq, i) => {
         if (!this.ctx || !this.masterGain) return;
         const osc = this.ctx.createOscillator();
@@ -226,6 +231,88 @@ class HorrorSoundEngine {
         gain.connect(this.masterGain);
         osc.start(now + i * 0.12);
         osc.stop(now + i * 0.12 + 0.24);
+      });
+    } else if (monsterId === 'nagisa' || monsterId === 'nure') {
+      // Deep-sea / serpent hollow wail
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(monsterId === 'nure' ? 392.0 : 329.63, now);
+      osc.frequency.exponentialRampToValueAtTime(monsterId === 'nure' ? 246.94 : 220, now + 0.55);
+      filter.type = 'lowpass';
+      filter.frequency.value = 680;
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(vol * 0.65, now + 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 0.62);
+    } else if (monsterId === 'hyakume') {
+      // Giant cyclops heavy low thud + eerie shimmer
+      [82.41, 61.74].forEach((freq, i) => {
+        if (!this.ctx || !this.masterGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + i * 0.16);
+        osc.frequency.exponentialRampToValueAtTime(32, now + i * 0.16 + 0.25);
+        gain.gain.setValueAtTime(vol * 0.72, now + i * 0.16);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.16 + 0.28);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now + i * 0.16);
+        osc.stop(now + i * 0.16 + 0.3);
+      });
+    } else if (monsterId === 'jigoku_warden' || monsterId === 'senzai_fallen') {
+      // Hollow spirit bell / tragic discordant chime
+      const chord =
+        monsterId === 'senzai_fallen' ? [293.66, 311.13, 440.0] : [220.0, 233.08, 329.63];
+      chord.forEach((freq, i) => {
+        if (!this.ctx || !this.masterGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + i * 0.08);
+        gain.gain.setValueAtTime(vol * 0.45, now + i * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.42);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.45);
+      });
+    } else if (monsterId === 'kuishinbo') {
+      // Heavy butcher cleaver metallic scrape + low growl
+      [110, 740, 784].forEach((freq, i) => {
+        if (!this.ctx || !this.masterGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = i === 0 ? 'sawtooth' : 'square';
+        osc.frequency.setValueAtTime(freq, now + i * 0.04);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.6, now + i * 0.04 + 0.24);
+        gain.gain.setValueAtTime(vol * (i === 0 ? 0.52 : 0.22), now + i * 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.26);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now + i * 0.04);
+        osc.stop(now + i * 0.04 + 0.28);
+      });
+    } else if (monsterId === 'rin_mio') {
+      // Twin weeping minor-2nd duet
+      [523.25, 493.88, 783.99, 739.99].forEach((freq, i) => {
+        if (!this.ctx || !this.masterGain) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + i * 0.09);
+        gain.gain.setValueAtTime(vol * 0.4, now + i * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.26);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(now + i * 0.09);
+        osc.stop(now + i * 0.09 + 0.28);
       });
     } else if (monsterId === 'oomukade') {
       // Rapid centipede chitin clicks
@@ -242,9 +329,11 @@ class HorrorSoundEngine {
         osc.start(now + i * 0.055);
         osc.stop(now + i * 0.055 + 0.04);
       }
-    } else if (monsterId === 'saigomo' || monsterId === 'biwaki') {
-      // Dissonant traditional biwa / shrine bell sting
-      [233.08, 246.94, 466.16].forEach((freq, idx) => {
+    } else if (monsterId === 'saigomo' || monsterId === 'biwaki' || monsterId === 'enzukai') {
+      // Dissonant traditional biwa / abyssal shrine gong sting
+      const chord =
+        monsterId === 'enzukai' ? [146.83, 207.65, 440.0] : [233.08, 246.94, 466.16];
+      chord.forEach((freq, idx) => {
         if (!this.ctx || !this.masterGain) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -358,23 +447,50 @@ class HorrorSoundEngine {
   private bgmTimer: number | null = null;
   private bgmChapterId = 1;
   private bgmBossMode = false;
+  private bgmChaseMode = false;
+  private bgmNightmareMode = false;
   private bgmStep = 0;
 
-  public startBgm(chapterId: number, bossMode = false) {
+  public startBgm(chapterId: number, bossMode = false, chaseMode = false, nightmareMode = false) {
     this.init();
     this.bgmChapterId = chapterId;
     this.bgmBossMode = bossMode;
+    this.bgmChaseMode = chaseMode;
+    this.bgmNightmareMode = nightmareMode;
     this.bgmStep = 0;
     if (this.bgmTimer !== null) {
       window.clearInterval(this.bgmTimer);
       this.bgmTimer = null;
     }
 
-    const intervalMs = bossMode ? 380 : 920;
+    const baseInterval = chaseMode ? 270 : bossMode ? 380 : 920;
+    const intervalMs = nightmareMode ? Math.round(baseInterval * 0.78) : baseInterval;
     this.bgmTimer = window.setInterval(() => {
       this.tickBgmNote();
     }, intervalMs);
     this.tickBgmNote();
+  }
+
+  public playFinalChaseAlarm() {
+    if (!this.ctx || !this.masterGain || this.muted) return;
+    const now = this.ctx.currentTime;
+
+    // Deep ominous shock boom + urgent rising horror siren sting
+    [73.42, 110, 220, 440, 466.16].forEach((freq, idx) => {
+      if (!this.ctx || !this.masterGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx < 2 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(freq * 0.92, now + idx * 0.04);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.18, now + 0.72);
+      gain.gain.setValueAtTime(0.001, now + idx * 0.04);
+      gain.gain.linearRampToValueAtTime(idx === 0 ? 0.28 : 0.14, now + idx * 0.04 + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+      osc.start(now + idx * 0.04);
+      osc.stop(now + 0.98);
+    });
   }
 
   public stopBgm() {
@@ -389,8 +505,8 @@ class HorrorSoundEngine {
     const now = this.ctx.currentTime;
     const step = this.bgmStep++;
 
-    if (this.bgmBossMode) {
-      // Intense horror boss taiko & dissonant tritone ostinato
+    if (this.bgmBossMode || this.bgmChaseMode) {
+      // Intense horror boss / final escape chase taiko & dissonant tritone ostinato
       const isStrongBeat = step % 4 === 0;
       const isOffBeat = step % 2 === 1;
 
@@ -398,14 +514,17 @@ class HorrorSoundEngine {
         const drumOsc = this.ctx.createOscillator();
         const drumGain = this.ctx.createGain();
         drumOsc.type = 'sine';
-        drumOsc.frequency.setValueAtTime(isStrongBeat ? 82 : 66, now);
-        drumOsc.frequency.exponentialRampToValueAtTime(28, now + 0.24);
-        drumGain.gain.setValueAtTime(isStrongBeat ? 0.22 : 0.14, now);
-        drumGain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+        drumOsc.frequency.setValueAtTime(isStrongBeat ? 88 : 70, now);
+        drumOsc.frequency.exponentialRampToValueAtTime(28, now + 0.22);
+        drumGain.gain.setValueAtTime(
+          (isStrongBeat ? 0.22 : 0.14) * (this.bgmChaseMode ? 1.2 : 1.0),
+          now
+        );
+        drumGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
         drumOsc.connect(drumGain);
         drumGain.connect(this.masterGain);
         drumOsc.start(now);
-        drumOsc.stop(now + 0.28);
+        drumOsc.stop(now + 0.26);
       }
 
       // Eerie dissonant low brass/string ostinato (D2, Eb2, F2, Ab1, B1)
@@ -417,10 +536,13 @@ class HorrorSoundEngine {
       stringOsc.type = 'sawtooth';
       stringOsc.frequency.setValueAtTime(freq, now);
       stringFilter.type = 'lowpass';
-      stringFilter.frequency.setValueAtTime(isStrongBeat ? 460 : 300, now);
+      stringFilter.frequency.setValueAtTime(
+        isStrongBeat ? (this.bgmChaseMode ? 580 : 460) : 340,
+        now
+      );
       stringGain.gain.setValueAtTime(0.001, now);
-      stringGain.gain.linearRampToValueAtTime(0.075, now + 0.05);
-      stringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      stringGain.gain.linearRampToValueAtTime(this.bgmChaseMode ? 0.095 : 0.075, now + 0.04);
+      stringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
       stringOsc.connect(stringFilter);
       stringFilter.connect(stringGain);
       stringGain.connect(this.masterGain);
@@ -445,27 +567,35 @@ class HorrorSoundEngine {
       return;
     }
 
-    // Exploration Horror BGM (Ch1-3): eerie Japanese Hirajoshi chimes & hollow bowed scrapes
+    // Exploration Horror BGM (Ch1-3 & Ch5-7): eerie Japanese Hirajoshi / Miyako-bushi scales
     const scale =
-      this.bgmChapterId === 3
-        ? [293.66, 311.13, 440.0, 466.16, 587.33, 622.25] // D Hirajoshi (haunting shrine)
-        : this.bgmChapterId === 2
-          ? [246.94, 261.63, 349.23, 392.0, 493.88, 523.25] // B minor-2nd palace
-          : [220.0, 233.08, 311.13, 329.63, 440.0, 466.16]; // A eerie school tension
+      this.bgmChapterId === 7
+        ? [174.61, 185.0, 261.63, 277.18, 349.23, 392.0] // F Jigoku underworld dread
+        : this.bgmChapterId === 6
+          ? [196.0, 207.65, 293.66, 311.13, 392.0, 415.3] // G Deep-Sea Sanctum abyss
+          : this.bgmChapterId === 5
+            ? [233.08, 246.94, 329.63, 369.99, 466.16, 493.88] // Bb Aogashima Island fog
+            : this.bgmChapterId === 3
+              ? [293.66, 311.13, 440.0, 466.16, 587.33, 622.25] // D Hirajoshi (haunting shrine)
+              : this.bgmChapterId === 2
+                ? [246.94, 261.63, 349.23, 392.0, 493.88, 523.25] // B minor-2nd palace
+                : [220.0, 233.08, 311.13, 329.63, 440.0, 466.16]; // A eerie school tension
 
-    // Eerie sparse melody pluck every 2nd or 3rd step
-    if (step % 2 === 0 || Math.random() < 0.35) {
-      const f = scale[Math.floor(Math.random() * scale.length)] * (Math.random() < 0.25 ? 0.5 : 1);
+    // Eerie sparse melody pluck every 2nd or 3rd step (more frequent & lower in Nightmare Mode)
+    if (step % 2 === 0 || Math.random() < (this.bgmNightmareMode ? 0.6 : 0.35)) {
+      const f =
+        scale[Math.floor(Math.random() * scale.length)] *
+        (this.bgmNightmareMode ? 0.75 : Math.random() < 0.25 ? 0.5 : 1);
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
-      osc.type = Math.random() < 0.5 ? 'sine' : 'triangle';
+      osc.type = this.bgmNightmareMode ? 'sawtooth' : Math.random() < 0.5 ? 'sine' : 'triangle';
       osc.frequency.setValueAtTime(f, now);
-      osc.frequency.linearRampToValueAtTime(f * (Math.random() < 0.4 ? 0.985 : 1.005), now + 1.4);
+      osc.frequency.linearRampToValueAtTime(f * (Math.random() < 0.4 ? 0.98 : 1.01), now + 1.4);
       filter.type = 'lowpass';
-      filter.frequency.value = 1200;
+      filter.frequency.value = this.bgmNightmareMode ? 900 : 1200;
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.055, now + 0.08);
+      gain.gain.linearRampToValueAtTime(this.bgmNightmareMode ? 0.068 : 0.055, now + 0.08);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
       osc.connect(filter);
       filter.connect(gain);
@@ -742,6 +872,47 @@ class HorrorSoundEngine {
       gain.connect(this.masterGain);
       osc.start(now + idx * 0.045);
       osc.stop(now + idx * 0.045 + 0.45);
+    });
+  }
+
+  public playPoisonSplash() {
+    if (!this.ctx || !this.masterGain || this.muted) return;
+    const now = this.ctx.currentTime;
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.28);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(520, now);
+    filter.frequency.exponentialRampToValueAtTime(1450, now + 0.24);
+    filter.Q.value = 3.0;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    noise.start(now);
+
+    [293.66, 369.99, 554.37].forEach((f, i) => {
+      if (!this.ctx || !this.masterGain) return;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, now + i * 0.055);
+      g.gain.setValueAtTime(0.14, now + i * 0.055);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.3);
+      osc.connect(g);
+      g.connect(this.masterGain);
+      osc.start(now + i * 0.055);
+      osc.stop(now + i * 0.055 + 0.32);
     });
   }
 }
