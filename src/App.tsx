@@ -379,8 +379,8 @@ export default function App() {
 
       {/* Chapter Story Intro Cutscene */}
       {screen === 'intro' && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/92 p-6">
-          <div className="max-w-2xl w-full bg-[#0b0a0f] border border-zinc-800 rounded-lg p-7 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/92 p-4 sm:p-6 overflow-y-auto touch-pan-y">
+          <div className="max-w-2xl w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#0b0a0f] border border-zinc-800 rounded-lg p-5 sm:p-7 space-y-5 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs text-red-400 font-medium tracking-wider">
@@ -511,6 +511,9 @@ export default function App() {
           onSwordAttack={() => engineRef.current?.triggerSwordAttack()}
           onInteract={() => engineRef.current?.triggerInteract()}
           onLockPointer={() => engineRef.current?.requestPointerLock()}
+          onTouchMove={(mx, my) => engineRef.current?.setTouchMove(mx, my)}
+          onTouchSprint={(sprinting) => engineRef.current?.setTouchSprint(sprinting)}
+          onAdjustLook={(dx, dy) => engineRef.current?.adjustLook(dx, dy)}
         />
       )}
 
@@ -528,8 +531,8 @@ export default function App() {
 
       {/* Diary Reader Overlay */}
       {screen === 'diary' && activeDiary && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/82 p-6">
-          <div className="max-w-lg w-full bg-[#13100e] border border-amber-900/50 rounded-lg p-7 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/82 p-4 sm:p-6 overflow-y-auto touch-pan-y">
+          <div className="max-w-lg w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#13100e] border border-amber-900/50 rounded-lg p-5 sm:p-7 space-y-5 shadow-2xl">
             <div className="border-b border-amber-900/40 pb-3">
               <p className="text-xs text-amber-400/90">
                 {activeDiary.dateLabel} · 작성자: {activeDiary.author}
@@ -609,8 +612,8 @@ export default function App() {
 
       {/* Death Screen */}
       {screen === 'dead' && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#060305]/94 p-6">
-          <div className="max-w-xl w-full bg-[#0e090c] border border-red-900/60 rounded-lg overflow-hidden shadow-2xl flex flex-col sm:flex-row">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#060305]/94 p-4 sm:p-6 overflow-y-auto touch-pan-y">
+          <div className="max-w-xl w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#0e090c] border border-red-900/60 rounded-lg overflow-hidden shadow-2xl flex flex-col sm:flex-row">
             <MonsterPortrait
               monsterId={killerLore.id}
               className="w-full sm:w-48 h-52 sm:h-auto shrink-0 border-b sm:border-b-0 sm:border-r border-red-900/40"
@@ -668,8 +671,8 @@ export default function App() {
           activeClearScenes[activeClearScenes.length - 1];
 
         return (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 p-6">
-            <div className="max-w-2xl w-full bg-[#0b0b0f] border border-zinc-800 rounded-lg p-7 space-y-5 shadow-2xl">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/90 p-4 sm:p-6 overflow-y-auto touch-pan-y">
+            <div className="max-w-2xl w-full max-h-[92dvh] overflow-y-auto touch-pan-y bg-[#0b0b0f] border border-zinc-800 rounded-lg p-5 sm:p-7 space-y-5 shadow-2xl">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
                   <p className="text-xs text-emerald-400 font-medium tracking-wider">

@@ -320,6 +320,7 @@ export class MimicEngine {
   private lastPointerY = 0;
   private touchMoveX = 0;
   private touchMoveY = 0;
+  private touchSprinting = false;
 
   constructor(container: HTMLElement, callbacks: EngineCallbacks) {
     this.container = container;
@@ -342,6 +343,7 @@ export class MimicEngine {
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -483,6 +485,10 @@ export class MimicEngine {
   private handleMouseDown = (e: MouseEvent) => {
     if (this.mode !== 'playing' || this.kintoruControlActive) return;
     soundEngine.init();
+    const isCoarsePointer =
+      typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (isCoarsePointer) return;
+
     this.isDraggingLook = true;
     this.lastPointerX = e.clientX;
     this.lastPointerY = e.clientY;
@@ -556,9 +562,14 @@ export class MimicEngine {
     this.touchMoveY = my;
   }
 
+  public setTouchSprint(sprinting: boolean) {
+    this.touchSprinting = sprinting;
+  }
+
   public adjustLook(dx: number, dy: number) {
-    this.yaw -= dx * 0.004;
-    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.004, -1.22, 1.22);
+    if (this.mode !== 'playing' || this.kintoruControlActive) return;
+    this.yaw -= dx * 0.0046;
+    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.0046, -1.22, 1.22);
   }
 
   public toggleFlashlight() {
@@ -897,6 +908,10 @@ export class MimicEngine {
     this.mode = paused ? 'paused' : 'playing';
     if (paused) {
       this.keys.clear();
+      this.touchMoveX = 0;
+      this.touchMoveY = 0;
+      this.touchSprinting = false;
+      this.isDraggingLook = false;
       this.releasePointerLock();
       soundEngine.stopBgm();
     } else {
@@ -1097,6 +1112,10 @@ export class MimicEngine {
       ? (isNightmare ? 9 : isBossFight ? 17 : 13) + Math.random() * 5
       : 999999;
     this.keys.clear();
+    this.touchMoveX = 0;
+    this.touchMoveY = 0;
+    this.touchSprinting = false;
+    this.isDraggingLook = false;
 
     this.buildWorldFromMapData(map, false);
 
@@ -2333,6 +2352,9 @@ export class MimicEngine {
   private triggerKintoruControl() {
     this.kintoruControlActive = true;
     this.keys.clear();
+    this.touchMoveX = 0;
+    this.touchMoveY = 0;
+    this.touchSprinting = false;
     this.isDraggingLook = false;
     this.releasePointerLock();
     this.cameraShakeTimer = 0.45;
@@ -2468,7 +2490,7 @@ export class MimicEngine {
     const isGodJob = isDeveloper || isHacker;
     const studentBoost = this.jobId === 'student' && this.skillActiveTimer > 0;
     const wantsSprint =
-      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) &&
+      (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.touchSprinting) &&
       isMoving &&
       !this.crouching &&
       !this.exhausted;
