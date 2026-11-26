@@ -76,6 +76,9 @@ const INITIAL_HUD: HudSnapshot = {
   finalChaseElapsed: 0,
   inChaseMap: false,
   carriedRat: 'none',
+  kyogiEyesPierced: 0,
+  kyogiEyesTotal: 0,
+  kyogiImmobilized: false,
   difficulty: 'normal',
 };
 
@@ -214,11 +217,17 @@ export default function App() {
       onItemCollected: (count, total, kind) => {
         if (kind === 'rat_feed') {
           if (count >= total) {
-            showToast(
-              '미오와 린에게 독 쥐 3회 먹이기 완료! 선착장 출구로 들어가 추격전을 돌파하세요!'
-            );
+            showToast('미오와 린에게 독 쥐 3회 먹이기 완료!');
           } else {
             showToast(`미오와 린에게 독 쥐를 먹였습니다 (${count} / ${total})`);
+          }
+          return;
+        }
+        if (kind === 'kyogi_eye') {
+          if (count >= total) {
+            showToast('👁️ 쿄기의 눈을 모두 찔렀습니다! 쿄기가 움직일 수 없습니다!');
+          } else {
+            showToast(`👁️ 쿄기의 눈 찌르기 (${count} / ${total})`);
           }
           return;
         }

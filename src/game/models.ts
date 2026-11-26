@@ -887,7 +887,7 @@ export function createPaperLantern(color = 0xff8a3d): { group: THREE.Group; ligh
 }
 
 export function createCollectibleMesh(
-  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary',
+  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'kyogi_eye' | 'battery' | 'diary',
   textures: ProceduralTextureSet
 ): THREE.Group {
   const group = new THREE.Group();
@@ -1014,6 +1014,51 @@ export function createCollectibleMesh(
     tail.rotation.z = 0.22;
     tail.position.set(0.03, -0.01, -0.28);
     group.add(tail);
+  } else if (kind === 'kyogi_eye') {
+    const obsidianMat = new THREE.MeshStandardMaterial({
+      color: 0x111015,
+      roughness: 0.45,
+      metalness: 0.4,
+    });
+    const scleraMat = new THREE.MeshStandardMaterial({
+      color: 0xfef2f2,
+      emissive: 0x450a0a,
+      emissiveIntensity: 0.45,
+      roughness: 0.35,
+    });
+    const irisMat = new THREE.MeshStandardMaterial({
+      color: 0xfacc15,
+      emissive: 0xeab308,
+      emissiveIntensity: 1.5,
+      roughness: 0.2,
+    });
+    const pupilMat = new THREE.MeshStandardMaterial({
+      color: 0x09090b,
+      roughness: 0.9,
+    });
+
+    const eyeball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 12), scleraMat);
+    group.add(eyeball);
+
+    const iris = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.025, 16), irisMat);
+    iris.rotation.x = Math.PI / 2;
+    iris.position.z = 0.142;
+    group.add(iris);
+
+    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.125, 0.028), pupilMat);
+    pupil.position.z = 0.15;
+    group.add(pupil);
+
+    const outerRing = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.022, 8, 20), obsidianMat);
+    group.add(outerRing);
+
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2;
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.11, 6), irisMat);
+      thorn.position.set(Math.cos(ang) * 0.28, Math.sin(ang) * 0.28, 0);
+      thorn.rotation.z = ang - Math.PI / 2;
+      group.add(thorn);
+    }
   } else if (kind === 'battery') {
     const bodyMat = new THREE.MeshStandardMaterial({
       color: 0x18181b,

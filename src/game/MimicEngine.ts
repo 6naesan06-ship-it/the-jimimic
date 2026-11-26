@@ -92,6 +92,9 @@ export interface HudSnapshot {
   finalChaseElapsed: number;
   inChaseMap: boolean;
   carriedRat: 'none' | 'raw' | 'poisoned';
+  kyogiEyesPierced: number;
+  kyogiEyesTotal: number;
+  kyogiImmobilized: boolean;
   difficulty: DifficultyMode;
 }
 
@@ -109,7 +112,7 @@ export interface EngineCallbacks {
 
 interface CollectibleEntity {
   id: string;
-  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'battery' | 'diary';
+  kind: 'key' | 'ofuda' | 'butterfly' | 'seal' | 'rat' | 'kyogi_eye' | 'battery' | 'diary';
   diaryId?: string;
   mesh: THREE.Group;
   light?: THREE.PointLight;
@@ -133,6 +136,7 @@ interface MonsterEntity {
   memoryTimer: number;
   pathRefreshTimer: number;
   stunTimer: number;
+  immobilized?: boolean;
 }
 
 // Pre-allocated scratch helpers (zero GC in render loop)
@@ -248,6 +252,9 @@ export class MimicEngine {
   private inChaseMap = false;
   private carriedRat: 'none' | 'raw' | 'poisoned' = 'none';
   private ratsFedCount = 0;
+  private kyogiEyesPierced = 0;
+  private kyogiEyesTotal = 0;
+  private kyogiImmobilized = false;
   private poisonWellPos: { x: number; z: number } | null = null;
   private poisonWellLight: THREE.PointLight | null = null;
 
@@ -489,6 +496,8 @@ export class MimicEngine {
 
     if (e.button === 0 && this.isBossChapter() && !this.inChaseMap) {
       this.triggerSwordAttack();
+    } else if (e.button === 0 && this.chapterId === 5 && !this.inChaseMap) {
+      this.tryPierceNearbyKyogiEye();
     }
 
     if (!this.pointerLocked && this.renderer.domElement.requestPointerLock) {
@@ -693,9 +702,33 @@ export class MimicEngine {
 
       if (!this.exitUnlocked) {
         if (this.chapterId === 5) {
-          this.carriedRat = 'none';
-          this.advanceChapter5Feeding(true);
-          return;
+          if (this.ratsFedCount < 3) {
+            this.carriedRat = 'none';
+            this.advanceChapter5Feeding(true);
+            return;
+          }
+          let piercedNow = 0;
+          while (piercedNow < 3) {
+            let nearestEye: CollectibleEntity | null = null;
+            let bestEyeD = Infinity;
+            for (const item of this.collectibles) {
+              if (item.collected || item.kind !== 'kyogi_eye') continue;
+              const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+              if (d < bestEyeD) {
+                bestEyeD = d;
+                nearestEye = item;
+              }
+            }
+            if (!nearestEye) break;
+            this.collectItemEntity(nearestEye);
+            piercedNow++;
+          }
+          if (piercedNow > 0) {
+            this.callbacks.onSystemNotice(
+              `시스템 지배! 전 괴물 12초 정지 및 쿄기의 눈 ${piercedNow}개를 원격 파괴했습니다! (${this.kyogiEyesPierced}/${this.kyogiEyesTotal})`
+            );
+            return;
+          }
         }
         let nearestMain: CollectibleEntity | null = null;
         let bestD = Infinity;
@@ -753,8 +786,13 @@ export class MimicEngine {
           while (this.ratsFedCount < 3) {
             this.advanceChapter5Feeding(false);
           }
+          for (const item of this.collectibles) {
+            if (!item.collected && item.kind === 'kyogi_eye') {
+              this.collectItemEntity(item);
+            }
+          }
           this.callbacks.onSystemNotice(
-            '시스템 백도어! 전 괴물 15초 마비 및 미오와 린에게 독 쥐 3회 먹이기를 강제 완료했습니다!'
+            '시스템 백도어! 독 쥐 3회 먹이기 + 쿄기의 눈 10개 파괴를 일괄 해킹하여 쿄기를 정지시켰습니다!'
           );
           return;
         }
@@ -791,14 +829,29 @@ export class MimicEngine {
     let targetItem: CollectibleEntity | null = null;
     let bestDist = Infinity;
 
-    // Prioritize uncollected objective items first (keys/ofuda/butterflies/seals/rats)
+    // Prioritize uncollected objective items first (rats while <3, kyogi_eye, or keys/ofuda/butterflies/seals)
+    const preferEye = this.chapterId === 5 && this.ratsFedCount >= 3;
     for (const item of this.collectibles) {
       if (item.collected) continue;
       if (item.kind === 'battery' || item.kind === 'diary') continue;
+      if (this.chapterId === 5 && preferEye && item.kind !== 'kyogi_eye') continue;
+      if (this.chapterId === 5 && !preferEye && item.kind !== 'rat') continue;
       const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
       if (d < bestDist) {
         bestDist = d;
         targetItem = item;
+      }
+    }
+
+    if (!targetItem) {
+      for (const item of this.collectibles) {
+        if (item.collected) continue;
+        if (item.kind === 'battery' || item.kind === 'diary') continue;
+        const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+        if (d < bestDist) {
+          bestDist = d;
+          targetItem = item;
+        }
       }
     }
 
@@ -866,7 +919,9 @@ export class MimicEngine {
           ? '숨겨진 일기'
           : targetItem.kind === 'rat'
             ? '시궁쥐'
-            : '봉인 아이템';
+            : targetItem.kind === 'kyogi_eye'
+              ? '쿄기의 눈'
+              : '봉인 아이템';
     this.callbacks.onSystemNotice(`✨ 아이템 도약 [Q]! 가장 가까운 ${itemLabel} 앞으로 순간이동했습니다!`);
   }
 
@@ -1037,6 +1092,9 @@ export class MimicEngine {
     this.inChaseMap = false;
     this.carriedRat = 'none';
     this.ratsFedCount = 0;
+    this.kyogiEyesPierced = 0;
+    this.kyogiEyesTotal = chapterId === 5 ? 10 : 0;
+    this.kyogiImmobilized = false;
     this.collectedItems = 0;
     this.requiredItems = isBossFight ? 0 : meta.requiredItems;
     this.exitUnlocked = false;
@@ -1104,8 +1162,8 @@ export class MimicEngine {
     const speedScale = isNightmare ? 1.32 : 1.0;
     const spawnList: MonsterId[] = [...meta.monsters];
     if (isNightmare && !isBossFight && meta.monsters.length > 0) {
-      // Nightmare Mode spawns an extra relentless stalker
-      spawnList.push(meta.monsters[0]);
+      // Never duplicate rin_mio in Book II Ch.1; spawn an extra Nure instead
+      spawnList.push(chapterId === 5 ? 'nure' : meta.monsters[0]);
     }
     this.spawnMonstersFromList(spawnList, map, speedScale, isBossFight, false);
 
@@ -1780,23 +1838,37 @@ export class MimicEngine {
 
       const pos = gridToWorld(item.gx, item.gz, map);
       const mesh = createCollectibleMesh(item.kind, this.textures);
-      const baseY = item.kind === 'rat' ? 0.24 : item.kind === 'diary' ? 0.55 : 1.05;
+      const baseY =
+        item.kind === 'kyogi_eye'
+          ? 1.32
+          : item.kind === 'rat'
+            ? 0.24
+            : item.kind === 'diary'
+              ? 0.55
+              : 1.05;
       mesh.position.set(pos.x, baseY, pos.z);
       this.worldGroup.add(mesh);
 
       let light: THREE.PointLight | undefined;
       if (item.kind !== 'battery') {
         const glowColor =
-          item.kind === 'key'
-            ? 0xf59e0b
-            : item.kind === 'rat'
-              ? 0xf97316
-              : item.kind === 'butterfly'
-                ? 0xf472b6
-                : item.kind === 'ofuda' || item.kind === 'seal'
-                  ? 0xef4444
-                  : 0xd6d3d1;
-        light = new THREE.PointLight(glowColor, 1.1, 4.5, 2);
+          item.kind === 'kyogi_eye'
+            ? 0xeab308
+            : item.kind === 'key'
+              ? 0xf59e0b
+              : item.kind === 'rat'
+                ? 0xf97316
+                : item.kind === 'butterfly'
+                  ? 0xf472b6
+                  : item.kind === 'ofuda' || item.kind === 'seal'
+                    ? 0xef4444
+                    : 0xd6d3d1;
+        light = new THREE.PointLight(
+          glowColor,
+          item.kind === 'kyogi_eye' ? 1.45 : 1.1,
+          item.kind === 'kyogi_eye' ? 5.5 : 4.5,
+          2
+        );
         light.position.set(pos.x, baseY + 0.25, pos.z);
         this.worldGroup.add(light);
       }
@@ -1819,6 +1891,10 @@ export class MimicEngine {
         baseY,
       });
     });
+
+    if (!isChaseMap && chapterId === 5) {
+      this.kyogiEyesTotal = this.collectibles.filter((c) => c.kind === 'kyogi_eye').length;
+    }
   }
 
   private spawnMonstersFromList(
@@ -1892,6 +1968,23 @@ export class MimicEngine {
     });
   }
 
+  private tryPierceNearbyKyogiEye(): boolean {
+    if (this.mode !== 'playing' || this.chapterId !== 5 || this.inChaseMap) return false;
+    let closestEye: CollectibleEntity | null = null;
+    let bestDist = 2.65;
+    for (const item of this.collectibles) {
+      if (item.collected || item.kind !== 'kyogi_eye') continue;
+      const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+      if (d < bestDist) {
+        bestDist = d;
+        closestEye = item;
+      }
+    }
+    if (!closestEye) return false;
+    this.collectItemEntity(closestEye);
+    return true;
+  }
+
   public triggerInteract() {
     if (this.mode !== 'playing' || !this.mapData) return;
 
@@ -1900,7 +1993,7 @@ export class MimicEngine {
       const rinMio = this.monsters.find((m) => m.id === 'rin_mio' && m.stunTimer <= 0);
       if (rinMio && Math.hypot(rinMio.x - this.playerX, rinMio.z - this.playerZ) < 4.25) {
         this.carriedRat = 'none';
-        rinMio.stunTimer = 5.5;
+        rinMio.stunTimer = this.ratsFedCount >= 2 ? 12.0 : 5.5;
         rinMio.state = 'patrol';
         rinMio.memoryTimer = 0;
         this.spawnShockwave(rinMio.x, rinMio.z, 2.8, 0x22c55e, 0.42);
@@ -1910,13 +2003,14 @@ export class MimicEngine {
       }
     }
 
-    // 1. Check nearby collectibles
+    // 1. Check nearby collectibles (2.65m for Kyogi's Eyes, 2.35m for other collectibles)
     let closestItem: CollectibleEntity | null = null;
-    let bestDist = 2.35;
+    let bestDist = Infinity;
     for (const item of this.collectibles) {
       if (item.collected) continue;
+      const maxReach = item.kind === 'kyogi_eye' ? 2.65 : 2.35;
       const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
-      if (d < bestDist) {
+      if (d < maxReach && d < bestDist) {
         bestDist = d;
         closestItem = item;
       }
@@ -1982,10 +2076,50 @@ export class MimicEngine {
       this.callbacks.onSystemNotice(
         `🐀 미오와 린에게 독이 든 쥐를 먹였습니다! (${this.ratsFedCount}/3) — 5.5초간 고통에 몸부림칩니다.`
       );
+    } else if (this.kyogiEyesPierced < this.kyogiEyesTotal) {
+      this.callbacks.onSystemNotice(
+        `🐀 독 쥐 3회 먹이기 완료! 이제 쿄기의 눈을 모두 찔러 쿄기를 멈추세요 (${this.kyogiEyesPierced}/${this.kyogiEyesTotal})!`
+      );
     }
+
+    if (
+      this.ratsFedCount >= 3 &&
+      this.kyogiEyesPierced >= this.kyogiEyesTotal &&
+      !this.exitUnlocked
+    ) {
+      this.unlockExplorationExit();
+    }
+  }
+
+  private immobilizeKyogi() {
+    if (this.kyogiImmobilized) return;
+    this.kyogiImmobilized = true;
+    for (const m of this.monsters) {
+      if (m.id === 'kyogi') {
+        m.immobilized = true;
+        m.stunTimer = 999999;
+        m.state = 'patrol';
+        m.memoryTimer = 0;
+        m.rig.group.position.set(m.x, -0.32, m.z);
+        m.rig.group.rotation.x = 0.28;
+        this.spawnShockwave(m.x, m.z, 4.0, 0xeab308, 0.55);
+      }
+    }
+    soundEngine.playBossExplosion(true);
+    this.cameraShakeTimer = 0.45;
+    this.cameraShakeStrength = 0.12;
+    this.callbacks.onSubtitle({
+      speaker: '쿄기 (Kyōgi)',
+      accent: '#eab308',
+      text: '“크아아악!! 눈이… 보이지 않아… 내 몸이 움직이질 않는다!!”',
+    });
 
     if (this.ratsFedCount >= 3 && !this.exitUnlocked) {
       this.unlockExplorationExit();
+    } else {
+      this.callbacks.onSystemNotice(
+        `👁️ 쿄기의 눈 ${this.kyogiEyesTotal}개를 모두 찔렀습니다! 쿄기가 움직일 수 없게 되었습니다! 이제 미오와 린에게 독 쥐를 먹이세요 (${this.ratsFedCount}/3)`
+      );
     }
   }
 
@@ -2160,10 +2294,10 @@ export class MimicEngine {
     const isNightmare = this.difficulty === 'nightmare';
     const chaseSpeedScale = isNightmare ? 1.32 : 1.04;
 
-    // Book II Ch.1 specifically has Mio & Rin chasing in the dedicated chase map!
+    // Book II Ch.1 specifically has strictly ONE Mio & Rin chasing in the dedicated chase map (Kyogi is immobilized)!
     let chaseMonsters: MonsterId[];
     if (this.chapterId === 5) {
-      chaseMonsters = isNightmare ? ['rin_mio', 'rin_mio', 'rin_mio'] : ['rin_mio', 'rin_mio'];
+      chaseMonsters = isNightmare ? ['rin_mio', 'nure'] : ['rin_mio'];
     } else {
       chaseMonsters = [...meta.monsters];
       if (isNightmare && meta.monsters.length > 0) {
@@ -2175,7 +2309,7 @@ export class MimicEngine {
     const startWorld = gridToWorld(chaseMap.playerStart.gx, chaseMap.playerStart.gz, chaseMap);
     this.playerX = startWorld.x;
     this.playerZ = startWorld.z;
-    this.yaw = -Math.PI / 2; // Face East directly toward the far escape gate
+    this.yaw = -Math.PI / 2; // Face East into the maze corridor
     this.pitch = 0;
 
     this.cameraShakeTimer = 0.65;
@@ -2188,8 +2322,8 @@ export class MimicEngine {
     this.callbacks.onSubtitle(this.getFinalChaseSubtitle(this.chapterId));
     this.callbacks.onSystemNotice(
       this.chapterId === 5
-        ? '🚨 추격전 전용 맵 돌입! 미오와 린이 끝까지 쫓아옵니다 — 탈출구까지 전력 질주하세요!'
-        : '🚨 추격전 전용 맵 돌입! 뒤에서 몰려오는 마수들을 뿌리치고 출구까지 달리세요!'
+        ? '🚨 추격전 전용 미로 돌입! 미오와 린이 끝까지 쫓아옵니다 — 미로를 돌파해 탈출하세요!'
+        : '🚨 추격전 전용 미로 돌입! 뒤에서 몰려오는 마수들을 뿌리치고 출구까지 달리세요!'
     );
     this.pushHudSnapshot(null, 12, chaseMonsters[0] || null, true);
   }
@@ -2212,6 +2346,31 @@ export class MimicEngine {
       this.callbacks.onSystemNotice(
         '🐀 쥐를 잡았습니다! 섬 중앙의 [독이 든 우물]로 가져가 [E]로 독을 묻히세요!'
       );
+      return;
+    }
+
+    if (item.kind === 'kyogi_eye') {
+      item.collected = true;
+      item.mesh.visible = false;
+      if (item.light) item.light.intensity = 0;
+      this.kyogiEyesPierced++;
+      soundEngine.playSwordHit(true);
+      this.spawnShockwave(item.x, item.z, 2.2, 0xeab308, 0.35);
+      this.cameraShakeTimer = 0.14;
+      this.cameraShakeStrength = 0.045;
+      this.callbacks.onItemCollected(this.kyogiEyesPierced, this.kyogiEyesTotal, 'kyogi_eye');
+
+      if (this.kyogiEyesPierced === Math.ceil(this.kyogiEyesTotal / 2)) {
+        this.callbacks.onSubtitle({
+          speaker: '쿄기 (Kyōgi)',
+          accent: '#eab308',
+          text: '“크윽…! 감히 내 눈을 찌르다니… 어리석은 형사 놈, 절대 살려두지 않겠다!”',
+        });
+      }
+
+      if (this.kyogiEyesPierced >= this.kyogiEyesTotal) {
+        this.immobilizeKyogi();
+      }
       return;
     }
 
@@ -2599,8 +2758,12 @@ export class MimicEngine {
     // Animate collectibles, lanterns, head-turning dolls, swaying cocoons & drifting particles
     for (const item of this.collectibles) {
       if (item.collected) continue;
-      item.mesh.rotation.y = elapsed * (item.kind === 'rat' ? 2.4 : 1.6);
       item.mesh.position.y = item.baseY + Math.sin(elapsed * 2.5 + item.x) * 0.08;
+      if (item.kind === 'kyogi_eye') {
+        item.mesh.lookAt(this.playerX, item.mesh.position.y, this.playerZ);
+      } else {
+        item.mesh.rotation.y = elapsed * (item.kind === 'rat' ? 2.4 : 1.6);
+      }
     }
     this.lanterns.forEach((l) => {
       if (l.deadBroken) {
@@ -2725,6 +2888,13 @@ export class MimicEngine {
       }
     } else {
       for (const m of this.monsters) {
+        if (m.immobilized) {
+          m.rig.group.position.set(m.x + Math.sin(elapsed * 22) * 0.012, -0.32, m.z);
+          m.rig.group.rotation.x = 0.28;
+          animateMonsterRig(m.rig, m.id, elapsed * 0.15, false);
+          continue;
+        }
+
         const distToPlayer = Math.hypot(this.playerX - m.x, this.playerZ - m.z);
         if (distToPlayer < minMonsterDist) {
           minMonsterDist = distToPlayer;
@@ -2922,27 +3092,30 @@ export class MimicEngine {
     if (!prompt) {
       for (const item of this.collectibles) {
         if (item.collected) continue;
-        if (Math.hypot(item.x - this.playerX, item.z - this.playerZ) < 2.35) {
+        const maxReach = item.kind === 'kyogi_eye' ? 2.65 : 2.35;
+        if (Math.hypot(item.x - this.playerX, item.z - this.playerZ) < maxReach) {
           prompt =
-            item.kind === 'battery'
-              ? '[E] 손전등 건전지 획득'
-              : item.kind === 'diary'
-                ? '[E] 남겨진 기록 읽기'
-                : item.kind === 'rat'
-                  ? '[E] 시궁쥐 잡기'
-                  : item.kind === 'key'
-                    ? '[E] 교실 열쇠 획득'
-                    : item.kind === 'ofuda'
-                      ? this.chapterId >= 5
-                        ? '[E] 심해 성역 부적 획득'
-                        : '[E] 조상의 기억 부적 획득'
-                      : item.kind === 'butterfly'
+            item.kind === 'kyogi_eye'
+              ? `[E / 좌클릭] 쿄기의 눈 찌르기 (${this.kyogiEyesPierced}/${this.kyogiEyesTotal})`
+              : item.kind === 'battery'
+                ? '[E] 손전등 건전지 획득'
+                : item.kind === 'diary'
+                  ? '[E] 남겨진 기록 읽기'
+                  : item.kind === 'rat'
+                    ? '[E] 시궁쥐 잡기'
+                    : item.kind === 'key'
+                      ? '[E] 교실 열쇠 획득'
+                      : item.kind === 'ofuda'
                         ? this.chapterId >= 5
-                          ? '[E] 영혼의 등불 밝히기'
-                          : '[E] 나비 영혼 등불 바치기'
-                        : this.chapterId >= 5
-                          ? '[E] 백염의 성검 인장 획득'
-                          : '[E] 축복받은 검의 인장 획득';
+                          ? '[E] 심해 성역 부적 획득'
+                          : '[E] 조상의 기억 부적 획득'
+                        : item.kind === 'butterfly'
+                          ? this.chapterId >= 5
+                            ? '[E] 영혼의 등불 밝히기'
+                            : '[E] 나비 영혼 등불 바치기'
+                          : this.chapterId >= 5
+                            ? '[E] 백염의 성검 인장 획득'
+                            : '[E] 축복받은 검의 인장 획득';
           break;
         }
       }
@@ -2973,7 +3146,7 @@ export class MimicEngine {
             ? '[E] 지하실 문으로 들어가 추격전 시작'
             : '[E] 출구로 들어가 추격전 시작'
         : this.chapterId === 5
-          ? `봉인됨 (독 쥐 먹이기 ${this.ratsFedCount}/3 필요)`
+          ? `봉인됨 (독 쥐 ${this.ratsFedCount}/3 · 쿄기의 눈 ${this.kyogiEyesPierced}/${this.kyogiEyesTotal})`
           : `봉인됨 (${this.collectedItems}/${this.requiredItems} 수집 필요)`;
     }
 
@@ -3708,10 +3881,22 @@ export class MimicEngine {
             targetX = rm.x;
             targetZ = rm.z;
           }
-        } else {
+        } else if (this.ratsFedCount < 3) {
           let bestD = Infinity;
           for (const item of this.collectibles) {
             if (item.collected || item.kind !== 'rat') continue;
+            const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
+            if (d < bestD) {
+              bestD = d;
+              targetX = item.x;
+              targetZ = item.z;
+            }
+          }
+        }
+        if (targetX === null && this.kyogiEyesPierced < this.kyogiEyesTotal) {
+          let bestD = Infinity;
+          for (const item of this.collectibles) {
+            if (item.collected || item.kind !== 'kyogi_eye') continue;
             const d = Math.hypot(item.x - this.playerX, item.z - this.playerZ);
             if (d < bestD) {
               bestD = d;
@@ -3790,6 +3975,9 @@ export class MimicEngine {
       finalChaseElapsed: this.finalChaseElapsed,
       inChaseMap: this.inChaseMap,
       carriedRat: this.carriedRat,
+      kyogiEyesPierced: this.kyogiEyesPierced,
+      kyogiEyesTotal: this.kyogiEyesTotal,
+      kyogiImmobilized: this.kyogiImmobilized,
       difficulty: this.difficulty,
     });
   }

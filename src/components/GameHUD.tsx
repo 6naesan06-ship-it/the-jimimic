@@ -173,22 +173,42 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         </div>
         <p className="text-xs text-zinc-400 leading-snug">{chapter.objectiveLabel}</p>
 
-        {/* Chapter 5 Rat & Poisoned Well Inventory Status */}
+        {/* Chapter 5 Rat & Poisoned Well + Kyogi Eyes Status */}
         {chapter.id === 5 && !hud.inChaseMap && !hud.exitUnlocked && (
-          <div
-            className={`px-2.5 py-1.5 rounded border text-xs font-medium ${
-              hud.carriedRat === 'poisoned'
-                ? 'bg-emerald-950/75 border-emerald-600/70 text-emerald-200'
-                : hud.carriedRat === 'raw'
-                  ? 'bg-amber-950/75 border-amber-600/70 text-amber-200'
-                  : 'bg-zinc-900/80 border-zinc-700/80 text-zinc-300'
-            }`}
-          >
-            {hud.carriedRat === 'poisoned'
-              ? '🐀 보유 중: 독에 절인 쥐 → 미오와 린에게 다가가 [E]'
-              : hud.carriedRat === 'raw'
-                ? '🐀 보유 중: 시궁쥐 → 초록빛 독이 든 우물에서 [E]'
-                : '🐀 보유 쥐 없음 → 먼저 바닥의 시궁쥐를 잡으세요'}
+          <div className="space-y-1.5">
+            <div
+              className={`flex items-center justify-between px-2.5 py-1.5 rounded border text-xs font-medium ${
+                hud.kyogiImmobilized
+                  ? 'bg-emerald-950/75 border-emerald-600/70 text-emerald-200'
+                  : 'bg-amber-950/60 border-amber-600/60 text-amber-200'
+              }`}
+            >
+              <span>
+                {hud.kyogiImmobilized
+                  ? '👁️ 쿄기 정지 완료 (움직일 수 없음)'
+                  : '👁️ 쿄기의 눈 찌르기 [E / 좌클릭]'}
+              </span>
+              <span className="font-mono-tabular font-bold shrink-0">
+                {hud.kyogiEyesPierced} / {hud.kyogiEyesTotal}
+              </span>
+            </div>
+            <div
+              className={`px-2.5 py-1.5 rounded border text-xs font-medium ${
+                hud.carriedRat === 'poisoned'
+                  ? 'bg-emerald-950/75 border-emerald-600/70 text-emerald-200'
+                  : hud.carriedRat === 'raw'
+                    ? 'bg-amber-950/75 border-amber-600/70 text-amber-200'
+                    : 'bg-zinc-900/80 border-zinc-700/80 text-zinc-300'
+              }`}
+            >
+              {hud.collectedItems >= 3
+                ? '🐀 미오와 린에게 독 쥐 먹이기 완료 (3/3)'
+                : hud.carriedRat === 'poisoned'
+                  ? '🐀 보유 중: 독에 절인 쥐 → 미오와 린에게 다가가 [E]'
+                  : hud.carriedRat === 'raw'
+                    ? '🐀 보유 중: 시궁쥐 → 초록빛 독이 든 우물에서 [E]'
+                    : '🐀 보유 쥐 없음 → 먼저 바닥의 시궁쥐를 잡으세요'}
+            </div>
           </div>
         )}
 
@@ -221,7 +241,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
                         ? '미오와 린 위치'
                         : hud.carriedRat === 'raw'
                           ? '독이 든 우물 위치'
-                          : '가장 가까운 시궁쥐'
+                          : hud.collectedItems < 3
+                            ? '가장 가까운 시궁쥐'
+                            : '가장 가까운 쿄기의 눈'
                       : '가장 가까운 봉인'}{' '}
               · <span className="font-mono-tabular">{hud.nearestObjectiveDist}m</span>
             </span>
